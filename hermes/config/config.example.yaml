@@ -1,0 +1,30 @@
+# Exemplo de ~/.hermes/config.yaml para o Revenue Engine.
+# Copie e ajuste. NUNCA versionar com valores reais (secao 26 do blueprint).
+
+mcp_servers:
+  autohous_revenue:
+    command: "dotnet"
+    args:
+      - "/opt/autohous/revenue-mcp/AutoHous.Revenue.Mcp.dll"
+    env:
+      # O MCP fala com a Revenue API por HTTP; ele nunca recebe credencial de banco.
+      REVENUE_API_URL: "http://127.0.0.1:5080"
+      REVENUE_API_KEY: "${REVENUE_API_KEY}"
+    timeout: 30
+    connect_timeout: 10
+    enabled: true
+
+    # O filtro de ferramentas do Hermes e por SERVIDOR, nao por agente: nao existe
+    # escopo por agente. Portanto esta allowlist e a unica fronteira efetiva.
+    tools:
+      include:
+        - get_account_context
+        - list_account_evidence
+        - get_product_catalog
+      exclude: []
+      prompts: false
+      resources: false
+
+delegation:
+  max_concurrent_children: 3
+  max_spawn_depth: 1

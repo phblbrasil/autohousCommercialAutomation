@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AutoHous.Revenue.Agents/AutoHous.Revenue.Agents.csproj" />
+    <Project Path="src/AutoHous.Revenue.Api/AutoHous.Revenue.Api.csproj" />
+    <Project Path="src/AutoHous.Revenue.Application/AutoHous.Revenue.Application.csproj" />
+    <Project Path="src/AutoHous.Revenue.Domain/AutoHous.Revenue.Domain.csproj" />
+    <Project Path="src/AutoHous.Revenue.Ingestor/AutoHous.Revenue.Ingestor.csproj" />
+    <Project Path="src/AutoHous.Revenue.Infrastructure/AutoHous.Revenue.Infrastructure.csproj" />
+    <Project Path="src/AutoHous.Revenue.Mcp/AutoHous.Revenue.Mcp.csproj" />
+    <Project Path="src/AutoHous.Revenue.ReceitaFederal/AutoHous.Revenue.ReceitaFederal.csproj" />
+    <Project Path="src/AutoHous.Revenue.Migrator/AutoHous.Revenue.Migrator.csproj" />
+    <Project Path="src/AutoHous.Revenue.Worker/AutoHous.Revenue.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AutoHous.Revenue.Agents.Tests/AutoHous.Revenue.Agents.Tests.csproj" />
+    <Project Path="tests/AutoHous.Revenue.Application.Tests/AutoHous.Revenue.Application.Tests.csproj" />
+    <Project Path="tests/AutoHous.Revenue.Architecture.Tests/AutoHous.Revenue.Architecture.Tests.csproj" />
+    <Project Path="tests/AutoHous.Revenue.Domain.Tests/AutoHous.Revenue.Domain.Tests.csproj" />
+    <Project Path="tests/AutoHous.Revenue.Integration.Tests/AutoHous.Revenue.Integration.Tests.csproj" />
+    <Project Path="tests/AutoHous.Revenue.ReceitaFederal.Tests/AutoHous.Revenue.ReceitaFederal.Tests.csproj" />
+  </Folder>
+</Solution>

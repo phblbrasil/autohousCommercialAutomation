@@ -1,0 +1,8 @@
+Claro! Aqui esta o perfil da conta:
+
+{
+  "summary": "Resposta truncada pelo limite de tokens do modelo",
+  "segment": "dealership",
+  "research_completeness": 0.4,
+  "evidence": [
+    { "claim_type": "store_count", "claim_text":

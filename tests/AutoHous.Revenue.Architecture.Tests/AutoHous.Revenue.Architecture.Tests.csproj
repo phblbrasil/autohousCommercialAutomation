@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- Referencia TODOS os projetos: o teste precisa carregar cada assembly para
+       inspecionar suas dependencias reais. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AutoHous.Revenue.Agents\AutoHous.Revenue.Agents.csproj" />
+    <ProjectReference Include="..\..\src\AutoHous.Revenue.Api\AutoHous.Revenue.Api.csproj" />
+    <ProjectReference Include="..\..\src\AutoHous.Revenue.Application\AutoHous.Revenue.Application.csproj" />
+    <ProjectReference Include="..\..\src\AutoHous.Revenue.Domain\AutoHous.Revenue.Domain.csproj" />
+    <ProjectReference Include="..\..\src\AutoHous.Revenue.Infrastructure\AutoHous.Revenue.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\AutoHous.Revenue.Ingestor\AutoHous.Revenue.Ingestor.csproj" />
+    <ProjectReference Include="..\..\src\AutoHous.Revenue.Mcp\AutoHous.Revenue.Mcp.csproj" />
+    <ProjectReference Include="..\..\src\AutoHous.Revenue.ReceitaFederal\AutoHous.Revenue.ReceitaFederal.csproj" />
+    <ProjectReference Include="..\..\src\AutoHous.Revenue.Worker\AutoHous.Revenue.Worker.csproj" />
+  </ItemGroup>
+
+</Project>

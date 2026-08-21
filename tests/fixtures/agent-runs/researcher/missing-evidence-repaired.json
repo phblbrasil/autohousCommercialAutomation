@@ -1,0 +1,41 @@
+{
+  "summary": "Grupo automotivo regional com operacao multimarca e presenca digital consolidada no segmento de seminovos.",
+  "segment": "dealer_group",
+  "domain": "exemplo-sem-lastro.com.br",
+  "store_count": 12,
+  "research_completeness": 0.75,
+  "evidence": [
+    {
+      "claim_type": "company_overview",
+      "claim_text": "O site institucional descreve a empresa como grupo automotivo multimarca.",
+      "confidence": 0.8,
+      "source": {
+        "type": "website",
+        "url": "https://exemplo-sem-lastro.com.br/",
+        "observed_at": "2026-08-19T10:00:00Z"
+      }
+    },
+    {
+      "claim_type": "store_count",
+      "claim_text": "A pagina de unidades lista doze lojas ativas distribuidas em tres estados.",
+      "extracted_value": {
+        "store_count": 12
+      },
+      "confidence": 0.88,
+      "source": {
+        "type": "website",
+        "url": "https://exemplo-sem-lastro.com.br/unidades",
+        "observed_at": "2026-08-19T10:05:00Z"
+      }
+    }
+  ],
+  "brands": [
+    {
+      "name": "Toyota",
+      "relationship": "authorized_dealer",
+      "confidence": 0.9,
+      "evidence_index": 0
+    }
+  ],
+  "signals": []
+}

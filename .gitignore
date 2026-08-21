@@ -1,0 +1,17 @@
+bin/
+obj/
+.env
+*.user
+.vs/
+.idea/
+TestResults/
+
+# Cache e spool da carga da Receita: 7,3 GB por release.
+.receita-cache/
+.receita-work/
+
+# Boards de planejamento do Miro: binários, versionam mal e vivem fora do repo.
+*.xlsx
+
+# Skills e docs de referência baixados para consulta local, não do projeto.
+CLEAN_ARCHITECTURE_SKILL*.md

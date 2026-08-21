@@ -1,0 +1,86 @@
+Pesquisei a conta usando o site institucional, a pagina de unidades e uma nota da imprensa local. Segue o perfil estruturado:
+
+```json
+{
+  "summary": "Grupo automotivo de capital familiar com atuacao concentrada no interior de Sao Paulo, operando concessionarias de duas marcas e uma operacao propria de seminovos. Site institucional unico com vitrine de estoque compartilhada entre as unidades.",
+  "segment": "dealer_group",
+  "domain": "grupoventosul.com.br",
+  "store_count": 6,
+  "inventory_estimate": 380,
+  "research_completeness": 0.84,
+  "evidence": [
+    {
+      "claim_type": "store_count",
+      "claim_text": "A pagina 'Nossas Lojas' lista seis unidades ativas, sendo quatro concessionarias e dois pontos de seminovos.",
+      "extracted_value": { "store_count": 6 },
+      "confidence": 0.93,
+      "source": {
+        "type": "website",
+        "url": "https://grupoventosul.com.br/nossas-lojas",
+        "title": "Nossas Lojas - Grupo Vento Sul",
+        "observed_at": "2026-08-19T14:02:00Z"
+      }
+    },
+    {
+      "claim_type": "brand_relationship",
+      "claim_text": "O rodape do site identifica o grupo como concessionaria autorizada das marcas citadas.",
+      "extracted_value": { "brands": ["GWM", "Honda"] },
+      "confidence": 0.9,
+      "source": {
+        "type": "website",
+        "url": "https://grupoventosul.com.br/",
+        "title": "Grupo Vento Sul",
+        "observed_at": "2026-08-19T14:00:00Z"
+      }
+    },
+    {
+      "claim_type": "expansion",
+      "claim_text": "Nota do jornal local informa a inauguracao de uma nova unidade prevista para o proximo trimestre.",
+      "extracted_value": { "new_units": 1 },
+      "confidence": 0.71,
+      "source": {
+        "type": "news",
+        "url": "https://jornaldacidade.example.com/economia/nova-unidade-vento-sul",
+        "title": "Grupo anuncia nova unidade",
+        "observed_at": "2026-08-18T09:30:00Z"
+      }
+    },
+    {
+      "claim_type": "tech_stack",
+      "claim_text": "A vitrine de estoque carrega o mesmo componente de busca em todas as unidades, indicando catalogo centralizado.",
+      "confidence": 0.66,
+      "source": {
+        "type": "website",
+        "url": "https://grupoventosul.com.br/estoque",
+        "title": "Estoque",
+        "observed_at": "2026-08-19T14:05:00Z"
+      }
+    }
+  ],
+  "brands": [
+    { "name": "GWM", "relationship": "authorized_dealer", "confidence": 0.9, "evidence_index": 1 },
+    { "name": "Honda", "relationship": "authorized_dealer", "confidence": 0.88, "evidence_index": 1 }
+  ],
+  "locations": [
+    { "name": "Matriz", "location_type": "headquarters", "city": "Bauru", "state": "SP", "confidence": 0.92, "evidence_index": 0 },
+    { "name": "Unidade Marilia", "location_type": "store", "city": "Marilia", "state": "SP", "confidence": 0.85, "evidence_index": 0 }
+  ],
+  "signals": [
+    {
+      "signal_type": "expansion",
+      "strength": 0.71,
+      "title": "Nova unidade anunciada",
+      "description": "Inauguracao prevista para o proximo trimestre, segundo a imprensa local.",
+      "observed_at": "2026-08-18T09:30:00Z",
+      "evidence_index": 2
+    }
+  ],
+  "digital_presence": {
+    "has_inventory": true,
+    "has_offers": true,
+    "has_landing_pages": false
+  }
+}
+```
+
+Cobertura estimada em 0.84: nao localizei dados publicos de faturamento nem o organograma comercial.

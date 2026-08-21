@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>AutoHous.Revenue.Application</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Casos de uso e portas. Referencia apenas o dominio e abstracoes de
+       logging/DI - nunca Npgsql, HttpClient ou ASP.NET Core. A regra do §13 da
+       skill de arquitetura: "Application -> Infrastructure concreta" e proibida,
+       e o compilador impoe isso aqui. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AutoHous.Revenue.Domain\AutoHous.Revenue.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

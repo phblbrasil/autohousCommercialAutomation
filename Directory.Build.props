@@ -1,0 +1,18 @@
+<Project>
+
+  <!--
+    O global.json elege o Microsoft.Testing.Platform como runner de `dotnet test`.
+    Estas duas propriedades fixam o outro lado do contrato: os projetos de teste
+    se hospedam sobre o MTP em vez de subir o runner console proprio do xunit.
+
+    Hoje sao redundantes - o xunit.v3 4.0.0 ja usa MTP por padrao, e a suite roda
+    com `dotnet test` mesmo sem este arquivo (verificado em build limpo, 281/281).
+    Ficam como fixacao explicita, para que uma troca de versao do xunit nao volte
+    a desalinhar o runner do que o global.json declara.
+  -->
+  <PropertyGroup>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+</Project>

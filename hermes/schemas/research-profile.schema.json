@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autohous.com.br/schemas/research-profile.v1.json",
+  "title": "AutoHous Research Profile v1",
+  "description": "Contrato de saida do agente Researcher. Toda afirmacao sobre a conta deve estar lastreada em evidence[], referenciada por indice.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "segment", "research_completeness", "evidence"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 40,
+      "maxLength": 2000,
+      "description": "Visao geral da operacao da conta. Nunca uma mensagem comercial."
+    },
+    "segment": {
+      "type": "string",
+      "enum": [
+        "dealer_group",
+        "dealership",
+        "used_car_retailer",
+        "automaker",
+        "marketplace",
+        "rental_fleet",
+        "workshop_network",
+        "partner_agency",
+        "other"
+      ]
+    },
+    "domain": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+      "description": "Dominio raiz em minusculas, sem esquema e sem www."
+    },
+    "store_count": { "type": ["integer", "null"], "minimum": 0, "maximum": 10000 },
+    "inventory_estimate": { "type": ["integer", "null"], "minimum": 0 },
+    "research_completeness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Autoavaliacao de cobertura. O quality gate da secao 29 exige >= 0.70."
+    },
+
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "brands":    { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/brand" } },
+    "locations": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/location" } },
+    "signals":   { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/signal" } },
+
+    "digital_presence": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "has_inventory":     { "type": ["boolean", "null"] },
+        "has_offers":        { "type": ["boolean", "null"] },
+        "has_landing_pages": { "type": ["boolean", "null"] }
+      }
+    }
+  },
+
+  "$defs": {
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+
+    "evidence_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Indice em evidence[]. O limite superior e verificado pelo EvidenceFirstGuard, que o schema sozinho nao consegue expressar."
+    },
+
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_type", "claim_text", "confidence", "source"],
+      "properties": {
+        "claim_type": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60,
+          "description": "Ex.: store_count, brand_relationship, expansion, hiring, tech_stack."
+        },
+        "claim_text": { "type": "string", "minLength": 10, "maxLength": 1000 },
+        "extracted_value": { "type": ["object", "null"] },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "url", "observed_at"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "company_registry", "website", "search", "social", "news",
+                "job_posting", "marketplace", "manual", "other"
+              ]
+            },
+            "url": { "type": "string", "format": "uri", "pattern": "^https?://" },
+            "title": { "type": ["string", "null"], "maxLength": 300 },
+            "observed_at": { "type": "string", "format": "date-time" }
+          }
+        }
+      }
+    },
+
+    "brand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "confidence", "evidence_index"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "relationship": {
+          "type": ["string", "null"],
+          "enum": ["authorized_dealer", "multi_brand_retailer", "service_only", "former", "unknown", null]
+        },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "evidence_index": { "$ref": "#/$defs/evidence_index" }
+      }
+    },
+
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["confidence", "evidence_index"],
+      "properties": {
+        "name": { "type": ["string", "null"], "maxLength": 200 },
+        "location_type": {
+          "type": ["string", "null"],
+          "enum": ["store", "service", "warehouse", "headquarters", "other", null]
+        },
+        "address": { "type": ["string", "null"], "maxLength": 400 },
+        "city": { "type": ["string", "null"], "maxLength": 120 },
+        "state": { "type": ["string", "null"], "pattern": "^[A-Z]{2}$" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "evidence_index": { "$ref": "#/$defs/evidence_index" }
+      }
+    },
+
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signal_type", "strength", "observed_at", "evidence_index"],
+      "properties": {
+        "signal_type": {
+          "type": "string",
+          "enum": [
+            "expansion", "new_store", "new_brand", "hiring", "leadership_change",
+            "website_relaunch", "marketing_investment", "tech_migration",
+            "funding", "merger_acquisition", "award", "other"
+          ]
+        },
+        "strength": { "$ref": "#/$defs/confidence" },
+        "title": { "type": ["string", "null"], "maxLength": 200 },
+        "description": { "type": ["string", "null"], "maxLength": 1000 },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "evidence_index": { "$ref": "#/$defs/evidence_index" }
+      }
+    }
+  }
+}
