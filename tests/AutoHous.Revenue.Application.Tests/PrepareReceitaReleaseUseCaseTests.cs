@@ -309,6 +309,30 @@ public class PrepareReceitaReleaseUseCaseTests
     }
 
     [Fact]
+    public async Task Stats_only_grava_o_que_leu_na_linha_de_lineage()
+    {
+        // A passada de agregado e uma execucao real sobre dezenas de milhoes de
+        // linhas. Fechar receita_releases com 0 lidos e 0 selecionados deixaria a
+        // unica linha que existe para dizer "esta competencia foi processada
+        // assim" afirmando o contrario do que rf_cnae_stats guarda.
+        var harness = new Harness();
+        harness.Source.Estabelecimentos.AddRange([
+            Est("11222333"),                    // concessionaria: entra
+            Est("11444777", cnae: "1091102")    // padaria: contada, nao selecionada
+        ]);
+
+        await harness.Build().ExecuteAsync(
+            Command(statsOnly: true), TestContext.Current.CancellationToken);
+
+        var lineage = harness.Releases.Summaries[Release];
+
+        Assert.Equal(2, lineage.EstablishmentsScanned);
+        Assert.Equal(1, lineage.EstablishmentsSelected);
+        Assert.Equal(ReceitaReleaseStatus.Streamed, lineage.Status);
+        Assert.Equal(0, lineage.CompaniesJoined);
+    }
+
+    [Fact]
     public async Task Stats_only_devolve_o_agregado_no_resultado()
     {
         var harness = new Harness();

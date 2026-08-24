@@ -84,10 +84,43 @@ falha dura pelo mesmo caminho de código de produção.
 `AGENT_RUNTIME` inválido falha na **inicialização**. Cair silenciosamente no fixture em
 produção geraria pesquisas falsas com aparência de sucesso.
 
-## Aviso sobre o envelope de `/v1/runs`
+## O envelope de `/v1/runs`, conferido na fonte (20/08/2026)
 
-A documentação pública lista os endpoints de `/v1/runs` mas não fixa o formato exato
-das respostas. `HermesAgentRuntime` extrai o texto final de forma tolerante, testando
-as formas conhecidas. Isso deve ser confirmado contra o servidor real na ativação
-(ARI-58); divergindo, `HermesOptions.Transport = Chat` usa o envelope OpenAI de
-`/v1/chat/completions`, que é especificado com exatidão.
+A documentação pública lista os endpoints mas não fixa o formato das respostas. Com o
+Hermes instalado, o formato deixou de ser suposição: ele está em
+`~/.hermes/hermes-agent/gateway/platforms/api_server.py`, e é este:
+
+```jsonc
+// POST /v1/runs
+{"run_id": "run_<hex>", "status": "started"}
+
+// GET /v1/runs/{id} — terminal, sucesso
+{"object": "hermes.run", "run_id": "...", "status": "completed",
+ "session_id": "...", "model": "...", "last_event": "run.completed",
+ "output": "<texto final>",                       // string, não array
+ "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
+
+// GET /v1/runs/{id} — terminal, falha
+{"status": "failed", "error": "..."}   // ou "cancelled"
+```
+
+Três divergências entre o que o cliente presumia e o que o servidor faz, corrigidas
+em `HermesAgentRuntime`:
+
+| Presunção | Realidade | Efeito se mantida |
+|---|---|---|
+| texto final em `output[]` (Responses API) ou `output_text` | `output` é **string** | `RawText` vazio → validador reprova **todo** run real |
+| sessão pelo header `X-Hermes-Session-Id` | `/v1/runs` só lê `session_id` do corpo; o header é lido por `/v1/chat/completions` | `research_run_id` não casa entre os dois lados |
+| prompt de sistema concatenado ao `input` | `instructions` é anexado ao system prompt do Hermes (`conversation_loop.py`) | a instrução do pesquisador vira preâmbulo do turno do usuário |
+
+O teste `Extrai_texto_do_envelope_real_do_hermes_run` fixa o envelope real; os outros
+formatos continuam aceitos por tolerância, não por observação. `HermesOptions.Transport
+= Chat` segue como contingência com o envelope OpenAI.
+
+## O que liga o API Server
+
+Não é `API_SERVER_ENABLED`. O gateway carrega a plataforma quando existe uma
+`API_SERVER_KEY` **utilizável** — 16 caracteres ou mais e fora da lista de
+placeholders (`gateway/config.py`). Chave fraca ou ausente e o servidor simplesmente
+não sobe, com o watcher de reconexão girando em erro. `scripts/hermes-setup.sh` gera
+uma chave de 48 hex e a espelha no `.env` do projeto.

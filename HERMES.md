@@ -61,6 +61,7 @@ nunca vira escrita parcial.
 | Prompt versionado | `hermes/prompts/researcher.v1.md` |
 | Skill | `hermes/skills/autohous-account-research/SKILL.md` |
 | Config de exemplo | `hermes/config/config.example.yaml` |
+| Setup local do agente | `scripts/hermes-setup.sh` |
 | Respostas gravadas | `tests/fixtures/agent-runs/researcher/` |
 
 O schema é a autoridade. Mudou o contrato? Nova versão de prompt, nunca edição da anterior —
@@ -144,6 +145,17 @@ dotnet run --project src/AutoHous.Revenue.Worker           # worker
 `AGENT_RUNTIME=fixture` (padrão) roda determinístico, sem custo e sem Hermes.
 `AGENT_RUNTIME=hermes` exige `hermes gateway` no ar e credencial de provider de modelo.
 
+```bash
+./scripts/hermes-setup.sh                                  # MCP + config.yaml + chave
+hermes setup --portal                                      # credencial (interativo)
+hermes gateway                                             # sobe o API Server em :8642
+hermes mcp test autohous_revenue                           # 3 ferramentas, allowlist
+```
+
+`scripts/hermes-setup.sh` é idempotente: publica o MCP, gera `API_SERVER_KEY`, aponta
+`skills.external_dirs` para `hermes/skills/` deste repositório — a skill versionada é a
+que roda, sem cópia para envelhecer — e espelha a chave no `.env`.
+
 ---
 
 ## Segurança
@@ -151,8 +163,21 @@ dotnet run --project src/AutoHous.Revenue.Worker           # worker
 - O agente **não recebe** `service_role` nem string de conexão.
 - O MCP fala com a Revenue API por HTTP; o projeto não referencia Npgsql — a fronteira
   é estrutural, verificável no output de build.
+- **A Revenue API exige `Authorization: Bearer`** ([ADR-0009](docs/adr/0009-credencial-de-borda-da-revenue-api.md)).
+  Sem `REVENUE_API_KEY` (ou `REVENUE_API_KEY_FILE`) utilizável, a API **não sobe** —
+  subir aberta seria pior, porque responderia 200 parecendo saudável. `/health` fica
+  aberto para probe de liveness; todo o resto exige a chave.
+- O segredo da API vive em **arquivo `0600`** (`~/.hermes/secrets/revenue-api-key`), e o
+  `config.yaml` guarda só o caminho. Dois motivos: o Hermes não interpola `${VAR}` no
+  bloco `env:` do MCP, e variável de ambiente vaza em `docker inspect` e em
+  `/proc/{pid}/environ`. É o mesmo formato que Docker secret e Kubernetes montam.
 - A allowlist de ferramentas do Hermes é **por servidor**, não por agente: `tools.include`
   no `config.yaml` é a única fronteira efetiva.
 - O API Server do Hermes expõe a superfície completa de ferramentas, incluindo execução
   de terminal. Manter em `127.0.0.1`, CORS desabilitado.
 - RLS habilitada em todas as tabelas desde a migration `0009`.
+
+**Para HML/PRD, o que ainda não está resolvido:** a chave viaja em claro — Bearer sobre
+HTTP só é aceitável no laço local, então a API precisa de TLS terminado à frente. E não
+há autorização por consumidor: quem tem a chave alcança toda a superfície, inclusive a
+de escrita. O gatilho de revisão está no ADR-0009.

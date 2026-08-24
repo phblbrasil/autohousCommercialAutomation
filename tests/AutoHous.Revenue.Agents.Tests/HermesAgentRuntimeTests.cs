@@ -12,6 +12,11 @@ namespace AutoHous.Revenue.Agents.Tests;
 /// A doc publica do Hermes lista os endpoints de /v1/runs mas nao fixa o envelope
 /// das respostas. Estes testes documentam as formas que o cliente aceita - se o
 /// servidor real divergir, e aqui que a divergencia fica visivel.
+///
+/// O envelope REAL foi conferido em 20/08/2026 contra
+/// <c>gateway/platforms/api_server.py</c> da instalacao local, e esta fixado em
+/// <see cref="Extrai_texto_do_envelope_real_do_hermes_run"/>. Os outros formatos
+/// continuam cobertos por tolerancia, nao por observacao.
 /// </summary>
 public class HermesAgentRuntimeTests
 {
@@ -240,6 +245,51 @@ public class HermesAgentRuntimeTests
     }
 
     // ------------------------------------------ envelopes alternativos de saida
+
+    [Fact]
+    public async Task Extrai_texto_do_envelope_real_do_hermes_run()
+    {
+        // Copia fiel do que _set_run_status monta no fim de um run bem-sucedido:
+        // object "hermes.run", output como STRING e usage com input/output_tokens.
+        // Enquanto o cliente so entendia output[] da Responses API, este payload
+        // voltava com RawText vazio - e o validador reprovava todo run real.
+        var (runtime, _) = Build(h => h
+            .Enqueue(HttpStatusCode.Accepted, """{"run_id":"run_abc123","status":"started"}""")
+            .Enqueue(HttpStatusCode.OK, """{"object":"hermes.run","run_id":"run_abc123","status":"running"}""")
+            .Enqueue(HttpStatusCode.OK, """
+                {"object":"hermes.run","run_id":"run_abc123","status":"completed",
+                 "session_id":"0199aa11-2233-4455-6677-889900aabbcc","model":"hermes-agent",
+                 "output":"{\"segment\":\"dealer_group\"}","last_event":"run.completed",
+                 "usage":{"input_tokens":1200,"output_tokens":800,"total_tokens":2000}}
+                """));
+
+        var result = await runtime.RunAsync(Request(), TestContext.Current.CancellationToken);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal("""{"segment":"dealer_group"}""", result.RawText);
+        Assert.Equal("run_abc123", result.ExternalRunId);
+        Assert.Equal(1200, result.InputTokens);
+        Assert.Equal(800, result.OutputTokens);
+    }
+
+    [Fact]
+    public async Task Manda_o_prompt_de_sistema_em_instructions_e_a_sessao_no_corpo()
+    {
+        // instructions e anexado ao system prompt do proprio Hermes
+        // (conversation_loop.py junta os dois), entao o researcher chega como
+        // instrucao de sistema em vez de virar preambulo do turno do usuario.
+        // session_id vai no corpo porque /v1/runs ignora o cabecalho de sessao.
+        var (runtime, handler) = Build(h => h
+            .Enqueue(HttpStatusCode.Accepted, RunCreated)
+            .Enqueue(HttpStatusCode.OK, """{"status":"completed","output":"ok"}"""));
+
+        await runtime.RunAsync(Request(), TestContext.Current.CancellationToken);
+
+        var body = handler.Requests[0].Body!;
+        Assert.Contains("\"instructions\":\"voce e o pesquisador\"", body);
+        Assert.Contains("\"input\":\"pesquise a conta\"", body);
+        Assert.Contains("\"session_id\":\"0199aa11-2233-4455-6677-889900aabbcc\"", body);
+    }
 
     [Fact]
     public async Task Extrai_texto_do_formato_responses_api()

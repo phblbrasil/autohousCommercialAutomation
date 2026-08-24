@@ -1,11 +1,14 @@
 using AutoHous.Revenue.Application;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AutoHous.Revenue.Domain;
+using AutoHous.Revenue.Api;
 using AutoHous.Revenue.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AutoHous.Revenue.Integration.Tests;
@@ -15,6 +18,13 @@ namespace AutoHous.Revenue.Integration.Tests;
 /// </summary>
 public class ResearchApiTests : IAsyncLifetime
 {
+    /// <summary>
+    /// A API nao sobe sem credencial (ver <c>RevenueApiKeys</c>), entao o teste
+    /// configura uma. 42 caracteres: acima do piso de 24 e fora da lista de
+    /// placeholders.
+    /// </summary>
+    private const string ApiKey = "chave-de-teste-do-revenue-engine-0123456789";
+
     private readonly PostgresFixture _postgres = new();
     private WebApplicationFactory<Program> _factory = null!;
     private HttpClient _client = null!;
@@ -23,10 +33,12 @@ public class ResearchApiTests : IAsyncLifetime
     {
         await _postgres.InitializeAsync();
 
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.UseSetting("REVENUE_DB_CONNECTION", _postgres.ConnectionString));
+        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
+            .UseSetting("REVENUE_DB_CONNECTION", _postgres.ConnectionString)
+            .UseSetting("REVENUE_API_KEY", ApiKey));
 
         _client = _factory.CreateClient();
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", ApiKey);
     }
 
     public async ValueTask DisposeAsync()
@@ -50,6 +62,148 @@ public class ResearchApiTests : IAsyncLifetime
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         return body.GetProperty("account_id").GetGuid();
+    }
+
+    // ------------------------------------------------------------ credencial
+
+    [Fact]
+    public async Task Rota_de_dados_sem_credencial_responde_401()
+    {
+        using var anonimo = _factory.CreateClient();
+
+        var response = await anonimo.GetAsync("/agent-runs");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Contains("Bearer", response.Headers.WwwAuthenticate.ToString());
+    }
+
+    [Fact]
+    public async Task Escrita_sem_credencial_responde_401_antes_de_tocar_o_banco()
+    {
+        // A rota de escrita e a que justifica o middleware: sem ele, qualquer um
+        // na rede cria conta e dispara pesquisa - que custa dinheiro de modelo.
+        using var anonimo = _factory.CreateClient();
+
+        var response = await anonimo.PostAsJsonAsync("/accounts", new
+        {
+            cnpj = "11222333000181",
+            name = "Invasor Veiculos"
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Credencial_errada_responde_401()
+    {
+        using var intruso = _factory.CreateClient();
+        intruso.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", "chave-errada-mas-do-tamanho-certo-000");
+
+        var response = await intruso.GetAsync("/agent-runs");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Health_continua_aberto_para_o_probe()
+    {
+        // Liveness de orquestrador roda sem credencial.
+        using var anonimo = _factory.CreateClient();
+
+        var response = await anonimo.GetAsync("/health");
+
+        response.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Chave_antiga_e_nova_convivem_durante_a_rotacao()
+    {
+        const string nova = "chave-nova-da-rotacao-0123456789abcdef";
+        const string antiga = "chave-antiga-da-rotacao-0123456789abcd";
+
+        using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder => builder
+            .UseSetting("REVENUE_DB_CONNECTION", _postgres.ConnectionString)
+            .UseSetting("REVENUE_API_KEY", $"{nova},{antiga}"));
+
+        foreach (var chave in new[] { nova, antiga })
+        {
+            using var client = factory.CreateClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", chave);
+
+            var response = await client.GetAsync("/agent-runs");
+
+            Assert.True(
+                response.IsSuccessStatusCode,
+                $"A chave '{chave[..12]}...' deveria valer durante a rotacao.");
+        }
+    }
+
+    [Fact]
+    public void Subida_sem_credencial_falha_em_vez_de_abrir_a_api()
+    {
+        // Uma API que sobe sem credencial parece saudavel e responde 200 - o
+        // buraco so aparece quando alguem de fora encontra.
+        var configuration = new ConfigurationBuilder().Build();
+
+        var erro = Assert.Throws<InvalidOperationException>(() => RevenueApiKeys.Load(configuration));
+
+        Assert.Contains("REVENUE_API_KEY", erro.Message);
+    }
+
+    [Fact]
+    public void Chave_curta_nao_conta_como_credencial()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["REVENUE_API_KEY"] = "curta" })
+            .Build();
+
+        Assert.Throws<InvalidOperationException>(() => RevenueApiKeys.Load(configuration));
+    }
+
+    [Fact]
+    public void Chave_de_arquivo_tem_precedencia_sobre_a_variavel()
+    {
+        // O formato que Docker secret e Kubernetes montam.
+        var arquivo = Path.GetTempFileName();
+
+        try
+        {
+            File.WriteAllText(arquivo, "chave-vinda-de-arquivo-0123456789ab\n");
+
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["REVENUE_API_KEY"] = "chave-da-variavel-0123456789abcdef",
+                    ["REVENUE_API_KEY_FILE"] = arquivo
+                })
+                .Build();
+
+            var chaves = RevenueApiKeys.Load(configuration);
+
+            Assert.True(chaves.Matches("chave-vinda-de-arquivo-0123456789ab"));
+            Assert.False(chaves.Matches("chave-da-variavel-0123456789abcdef"));
+        }
+        finally
+        {
+            File.Delete(arquivo);
+        }
+    }
+
+    [Fact]
+    public void Arquivo_de_chave_ausente_derruba_a_subida()
+    {
+        // Secret nao montado em container: parar aqui e melhor que subir aberto.
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["REVENUE_API_KEY_FILE"] = "/run/secrets/nao-montado"
+            })
+            .Build();
+
+        var erro = Assert.Throws<InvalidOperationException>(() => RevenueApiKeys.Load(configuration));
+
+        Assert.Contains("nao-montado", erro.Message);
     }
 
     [Fact]

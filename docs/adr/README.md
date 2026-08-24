@@ -14,6 +14,7 @@ revisão**, que é o campo que impede um ADR de virar dogma.
 | [0006](0006-fila-de-revisao-de-merge.md) | Fila de revisão em vez de merge otimista | Aceito |
 | [0007](0007-filtro-de-cnae-na-origem.md) | Filtro de CNAE na origem do seed | Aceito |
 | [0008](0008-socios-e-pii.md) | Quadro societário em tabela e migration próprias | Aceito |
+| [0009](0009-credencial-de-borda-da-revenue-api.md) | Credencial de borda da Revenue API | Aceito |
 
 Decisões anteriores a este diretório estão descritas em prosa em
 [architecture.md](../architecture.md) e [data-model.md](../data-model.md).

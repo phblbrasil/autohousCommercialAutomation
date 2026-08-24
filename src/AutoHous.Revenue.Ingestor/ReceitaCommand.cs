@@ -191,33 +191,54 @@ internal static class ReceitaCommand
     }
 
     /// <summary>
-    /// O recorte que importa para quem vai prospectar: quantos estabelecimentos
-    /// ativos do ICP central existem, por UF.
+    /// O recorte que importa para quem vai prospectar: o universo ativo por UF,
+    /// separado por camada de ICP.
+    ///
+    /// Separado, e nao somado, porque a soma esconde o que a competencia 2026-08
+    /// mostrou: o aftermarket e 6x o ICP central em numero de estabelecimentos.
+    /// Uma linha unica de "universo automotivo" faria uma decisao de recorte
+    /// parecer barata quando ela custa 9x.
     /// </summary>
     private static void PrintStatistics(PrepareReceitaReleaseResult prepared)
     {
-        var core = prepared.Statistics
+        var ativos = prepared.Statistics
             .Where(s => CompanyNormalizer.IsActiveRegistration(s.SituacaoCadastral))
-            .Where(s => CnaeCatalog.Classify(s.Cnae) is { InCoreIcp: true })
-            .GroupBy(s => s.Uf)
-            .Select(g => (Uf: g.Key.Length == 0 ? "--" : g.Key, Total: g.Sum(s => s.Establishments)))
-            .OrderByDescending(g => g.Total)
+            .Select(s => (Uf: s.Uf.Length == 0 ? "--" : s.Uf,
+                          Tier: CnaeCatalog.TierOf(s.Cnae),
+                          s.Establishments))
+            .Where(s => s.Tier is not null)
             .ToList();
 
-        if (core.Count == 0) return;
+        if (ativos.Count == 0) return;
+
+        long Total(IcpTier tier) => ativos.Where(a => a.Tier == tier).Sum(a => a.Establishments);
+
+        var porUf = ativos
+            .GroupBy(a => a.Uf)
+            .Select(g => (
+                Uf: g.Key,
+                Core: g.Where(a => a.Tier == IcpTier.Core).Sum(a => a.Establishments),
+                After: g.Where(a => a.Tier == IcpTier.Aftermarket).Sum(a => a.Establishments)))
+            .OrderByDescending(g => g.Core)
+            .ToList();
 
         Console.WriteLine();
-        Console.WriteLine($"ICP central ativo — {core.Sum(c => c.Total):N0} estabelecimento(s):");
+        Console.WriteLine("Universo ativo por camada de ICP:");
         Console.WriteLine();
+        Console.WriteLine($"  ICP central (vende veiculo) ..... {Total(IcpTier.Core),10:N0}");
+        Console.WriteLine($"  Aftermarket (oficina e peca) .... {Total(IcpTier.Aftermarket),10:N0}");
+        Console.WriteLine($"  Adjacente ....................... {Total(IcpTier.Adjacent),10:N0}");
+        Console.WriteLine();
+        Console.WriteLine("  UF        ICP central   aftermarket");
 
-        foreach (var (uf, total) in core.Take(10))
+        foreach (var (uf, core, after) in porUf.Take(10))
         {
-            Console.WriteLine($"  {uf}  {total,10:N0}");
+            Console.WriteLine($"  {uf}     {core,11:N0}   {after,11:N0}");
         }
 
-        if (core.Count > 10)
+        if (porUf.Count > 10)
         {
-            Console.WriteLine($"  ... mais {core.Count - 10} UF(s)");
+            Console.WriteLine($"  ... mais {porUf.Count - 10} UF(s)");
         }
     }
 

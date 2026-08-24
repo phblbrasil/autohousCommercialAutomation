@@ -46,6 +46,27 @@ public sealed class RevenueApiOptions
     public string BaseUrl { get; set; } =
         Environment.GetEnvironmentVariable("REVENUE_API_URL") ?? "http://127.0.0.1:5080";
 
-    public string ApiKey { get; set; } =
-        Environment.GetEnvironmentVariable("REVENUE_API_KEY") ?? string.Empty;
+    /// <summary>
+    /// Credencial de borda da Revenue API.
+    ///
+    /// <c>REVENUE_API_KEY_FILE</c> vem primeiro porque e o formato que Docker
+    /// secrets e Kubernetes montam - e porque, no caminho do Hermes, a
+    /// alternativa seria a chave literal dentro de <c>~/.hermes/config.yaml</c>:
+    /// o filtro de ambiente do Hermes so repassa ao subprocesso do MCP o que
+    /// esta declarado no bloco <c>env:</c> do servidor, sem interpolar
+    /// <c>${VAR}</c>. Caminho de arquivo no config, segredo no arquivo.
+    /// </summary>
+    public string ApiKey { get; set; } = ResolveApiKey();
+
+    private static string ResolveApiKey()
+    {
+        var path = Environment.GetEnvironmentVariable("REVENUE_API_KEY_FILE");
+
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        {
+            return File.ReadAllText(path).Trim();
+        }
+
+        return Environment.GetEnvironmentVariable("REVENUE_API_KEY") ?? string.Empty;
+    }
 }

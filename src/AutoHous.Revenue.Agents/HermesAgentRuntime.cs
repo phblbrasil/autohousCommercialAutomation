@@ -89,9 +89,18 @@ public sealed class HermesAgentRuntime : IAgentRuntime
         var payload = new JsonObject
         {
             ["model"] = _options.Model,
-            ["input"] = ComposeInput(request),
+            ["instructions"] = request.SystemPrompt,
+            ["input"] = request.UserPrompt,
             ["metadata"] = ToMetadata(request)
         };
+
+        // O X-Hermes-Session-Id existe, mas so /v1/chat/completions o le - em
+        // /v1/runs a sessao vem do corpo. Sem este campo o run abre sessao nova
+        // a cada tentativa e o research_run_id deixa de casar dos dois lados.
+        if (!string.IsNullOrWhiteSpace(request.SessionId))
+        {
+            payload["session_id"] = request.SessionId;
+        }
 
         using var created = await SendAsync(HttpMethod.Post, "/v1/runs", payload, request.SessionId, ct);
         var createdBody = await ReadJsonAsync(created, ct);
@@ -194,9 +203,6 @@ public sealed class HermesAgentRuntime : IAgentRuntime
             return await _http.SendAsync(message, token);
         }, ct);
 
-    private static string ComposeInput(AgentRunRequest request) =>
-        $"{request.SystemPrompt}\n\n---\n\n{request.UserPrompt}";
-
     private static JsonObject ToMetadata(AgentRunRequest request)
     {
         var metadata = new JsonObject
@@ -239,6 +245,18 @@ public sealed class HermesAgentRuntime : IAgentRuntime
     private static string? ExtractText(JsonNode? body)
     {
         if (body is null) return null;
+
+        // A forma que o servidor real usa: o envelope "hermes.run" devolve o
+        // texto final em output, como STRING - nao como array da Responses API.
+        // Verificado em gateway/platforms/api_server.py (_set_run_status com
+        // output=final_response). Vem primeiro porque e o unico caminho que
+        // executa em producao; os demais continuam por tolerancia.
+        if (body["output"] is JsonValue outputValue
+            && outputValue.TryGetValue<string>(out var outputText)
+            && !string.IsNullOrWhiteSpace(outputText))
+        {
+            return outputText;
+        }
 
         var direct = body["output_text"]?.GetValue<string>()
                      ?? body["result"]?["output_text"]?.GetValue<string>()

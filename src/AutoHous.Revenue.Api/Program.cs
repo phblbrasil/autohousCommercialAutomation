@@ -15,6 +15,10 @@ var connectionString =
     ?? Environment.GetEnvironmentVariable("REVENUE_DB_CONNECTION")
     ?? throw new InvalidOperationException("REVENUE_DB_CONNECTION nao configurada. Ver .env.example.");
 
+// Antes de qualquer servico: sem credencial utilizavel o processo nao sobe.
+// Ver RevenueApiKeys - a mesma regra que o gateway do Hermes aplica a si mesmo.
+var apiKeys = RevenueApiKeys.Load(builder.Configuration);
+
 builder.Services.AddRevenueInfrastructure(connectionString);
 builder.Services.AddRevenueUseCases();
 builder.Services.AddProblemDetails();
@@ -31,8 +35,13 @@ var app = builder.Build();
 app.UseSerilogRequestLogging();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseRevenueApiKey(apiKeys);
 
 app.MapRevenueEndpoints();
+
+Log.Information(
+    "Revenue API protegida por API key ({Count} chave(s) ativa(s); /health aberto).",
+    apiKeys.Count);
 
 app.Run();
 

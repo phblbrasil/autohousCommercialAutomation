@@ -182,9 +182,20 @@ public sealed class PrepareReceitaReleaseUseCase(
             if (!command.DryRun)
             {
                 await using var uow = await unitOfWork.BeginAsync(ct);
+
+                // O que a passada leu vai para a linha de lineage antes de
+                // fecha-la. Sem isto o stats-only deixava receita_releases com
+                // 0 lidos e 0 selecionados enquanto rf_cnae_stats guardava o
+                // agregado de dezenas de milhoes - a unica linha que existe
+                // para dizer "esta competencia foi processada assim" dizia zero.
+                await releases.RecordProgressAsync(
+                    uow, command.Release, ReceitaReleaseStatus.Streamed,
+                    scan.Scanned, scan.Selected, 0, 0, null, ct);
+
                 await releases.FinishAsync(
                     uow, command.Release, ReceitaReleaseStatus.Streamed,
                     "stats-only: nenhuma empresa capturada", ct);
+
                 await uow.CommitAsync(ct);
             }
 

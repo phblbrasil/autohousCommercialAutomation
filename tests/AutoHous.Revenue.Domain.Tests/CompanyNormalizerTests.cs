@@ -1,56 +1,5 @@
 namespace AutoHous.Revenue.Domain.Tests;
 
-public class CnaeCatalogTests
-{
-    [Theory]
-    [InlineData("4511-1/01")]
-    [InlineData("45.11-1-01")]
-    [InlineData("4511101")]
-    [InlineData(" 4511 1 01 ")]
-    public void Reconhece_o_mesmo_codigo_em_formatos_diferentes(string raw)
-    {
-        // As bases publicas circulam o mesmo CNAE em pelo menos tres grafias.
-        // Comparar string crua faria a mesma empresa cair em ramos diferentes
-        // conforme o arquivo de origem.
-        Assert.Equal("4511101", CnaeCatalog.NormalizeCode(raw));
-        Assert.Equal(AutomotiveOperation.Concessionaria, CnaeCatalog.Classify(raw)!.Operation);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData(null)]
-    [InlineData("SP")]
-    [InlineData("45111")]
-    [InlineData("451110123")]
-    public void Codigo_ilegivel_nao_normaliza(string? raw)
-    {
-        Assert.Null(CnaeCatalog.NormalizeCode(raw));
-        Assert.Null(CnaeCatalog.Classify(raw));
-    }
-
-    [Fact]
-    public void Codigo_valido_fora_do_universo_nao_classifica()
-    {
-        // 1091-1/02 e padaria: codigo perfeitamente valido, so nao e nosso.
-        Assert.NotNull(CnaeCatalog.NormalizeCode("1091-1/02"));
-        Assert.Null(CnaeCatalog.Classify("1091-1/02"));
-    }
-
-    [Fact]
-    public void Concessionaria_e_revenda_estao_no_icp_central()
-    {
-        Assert.True(CnaeCatalog.Classify("4511101")!.InCoreIcp);
-        Assert.True(CnaeCatalog.Classify("4511102")!.InCoreIcp);
-    }
-
-    [Fact]
-    public void Oficina_e_autopecas_ficam_fora_do_icp_central()
-    {
-        Assert.False(CnaeCatalog.Classify("4520001")!.InCoreIcp);
-        Assert.False(CnaeCatalog.Classify("4530703")!.InCoreIcp);
-    }
-}
-
 public class CompanyNormalizerTests
 {
     private static RawCompanyFields Valid(

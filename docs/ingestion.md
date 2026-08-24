@@ -73,10 +73,27 @@ as buscas por similaridade de nome. O filtro acontece na entrada.
 
 O catálogo distingue duas coisas:
 
-- **universo** — o CNAE está no catálogo;
-- **ICP central** (`InCoreIcp`) — concessionária, revenda, atacado de automóveis,
-  intermediação e motos a varejo. Oficina, autopeças e locadora entram na base
-  como universo adjacente, mas não na fila de prospecção do piloto.
+- **universo** — o CNAE está no catálogo, e a empresa entra na base;
+- **camada de ICP** (`IcpTier`) — em que fila ela entra.
+
+São três camadas, e os números são da competência `2026-08`, contados sobre a
+base inteira antes de qualquer filtro (`rf_cnae_stats`):
+
+| Camada | O que é | Ativos | CNAEs |
+|---|---|---|---|
+| `Core` | quem vende veículo: concessionária, revenda, atacado, intermediação, motos | **94.047** | 4511101-04, 4512901-02, 4541203-04 |
+| `Aftermarket` | quem vive de manutenção e peça: oficina mecânica, funilaria, autopeças | **593.022** | 4520001, 4520002, 4530701, 4530703 |
+| `Adjacent` | lavagem e polimento, locadora, atacado de reboques, ônibus e motos | **152.340** | 4520005, 7711000, 4511105-06, 4541201, 4542101 |
+
+Era um booleano — dentro ou fora do ICP central — e o booleano escondia a
+diferença que mais importava no que ficava de fora: o aftermarket é **6× o ICP
+central** em número de estabelecimentos, com motion próprio (ticket menor, compra
+menos sobre vitrine de estoque e mais sobre atendimento e recorrência). Chamar
+593 mil empresas de "resto" é uma decisão de produto tomada por omissão.
+
+`Adjacent` não é lixo: é mercado automotivo sem produto AutoHous com encaixe
+óbvio **hoje**. Promover qualquer um deles a camada própria é uma linha em
+`CnaeCatalog`.
 
 Códigos chegam em pelo menos três grafias (`4511-1/01`, `45.11-1-01`, `4511101`).
 `NormalizeCode` reduz tudo a sete dígitos: comparar string crua faria a mesma
@@ -123,7 +140,7 @@ conta nascer e "consertar depois" é o caminho para duas contas do mesmo grupo
 receberem pesquisa paga em paralelo.
 
 ```bash
-curl localhost:5080/merge-candidates
+curl -H "Authorization: Bearer $REVENUE_API_KEY" localhost:5080/merge-candidates
 curl -X POST localhost:5080/merge-candidates/<ID>/decide \
   -H 'content-type: application/json' -d '{"approve":true,"decidedBy":"pedro"}'
 ```
@@ -215,7 +232,8 @@ chega depois disputando trigrama contra o nome da própria filial.
 
 ### O filtro na origem
 
-Dos ~63 milhões de estabelecimentos, o universo do `CnaeCatalog` são ~1,5 milhão.
+Dos 72,8 milhões de estabelecimentos da competência `2026-08`, o universo do
+`CnaeCatalog` são 839.409 ativos — 1,2%.
 Gravar os 63 milhões em `companies_raw` custaria dezenas de GB de `jsonb` e
 poluiria **todo** índice trigrama — o `AccountGroupResolver` compara nome contra a
 tabela inteira.

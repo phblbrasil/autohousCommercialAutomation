@@ -92,10 +92,22 @@ para que a base não acumule PII antes de a política existir.
 Nunca em `HERMES.md`, `SKILL.md`, git, prompt ou saída de banco. Apenas variáveis de
 ambiente; secret manager em produção.
 
+Em HML/PRD, **arquivo antes de variável**: `REVENUE_API_KEY_FILE` tem precedência sobre
+`REVENUE_API_KEY`, e é o formato que Docker secret e volume de Kubernetes montam.
+Variável de ambiente vaza em `docker inspect`, em `/proc/{pid}/environ` e em qualquer
+dump de processo; arquivo com `0600` não. `scripts/hermes-setup.sh` já grava assim.
+
+Rotação: `REVENUE_API_KEY` aceita lista separada por vírgula, e todas valem ao mesmo
+tempo. Trocar credencial é publicar `nova,antiga`, migrar o consumidor e depois remover
+a antiga — sem janela de indisponibilidade. Ver
+[ADR-0009](adr/0009-credencial-de-borda-da-revenue-api.md).
+
 ## RLS
 
 Habilitada em todas as tabelas desde `0009`, sem policies: nega por padrão para
 `anon`/`authenticated`, enquanto `service_role` faz bypass. A migração para o Supabase
 não exige retrabalho de segurança.
 
-O agente não recebe `service_role`. Ele lê pelo MCP, que fala HTTP com a Revenue API.
+O agente não recebe `service_role`. Ele lê pelo MCP, que fala HTTP com a Revenue API —
+e desde o ADR-0009 essa chamada é autenticada: a API recusa qualquer rota que não seja
+`/health` sem `Authorization: Bearer`.

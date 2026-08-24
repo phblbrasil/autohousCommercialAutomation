@@ -90,27 +90,33 @@ Lote 01a01d82-555f-7d5f-bb0d-847023342cf2
 Fila de revisão do agrupamento:
 
 ```bash
-curl localhost:5080/merge-candidates
-curl -X POST localhost:5080/merge-candidates/<ID>/decide \
+# A API exige Authorization: Bearer em tudo, menos /health (ADR-0009).
+# Esta função evita repetir o header em cada linha daqui para baixo.
+set -a; . ./.env; set +a
+api() { curl -H "Authorization: Bearer $REVENUE_API_KEY" "$@"; }
+
+api localhost:5080/merge-candidates
+api -X POST localhost:5080/merge-candidates/<ID>/decide \
   -H 'content-type: application/json' -d '{"approve":true,"decidedBy":"pedro"}'
 ```
 
 ## Slice de pesquisa e score
 
 ```bash
+set -a; . ./.env; set +a          # REVENUE_API_KEY: sem ela a API não sobe
 export AGENT_RUNTIME=fixture      # determinístico, sem custo, sem Hermes
 
 dotnet run --project src/AutoHous.Revenue.Api &
 dotnet run --project src/AutoHous.Revenue.Worker &
 
-curl -X POST localhost:5080/accounts \
+api -X POST localhost:5080/accounts \
   -H 'content-type: application/json' \
   -d '{"cnpj":"11222333000181","name":"Grupo Vento Sul","uf":"SP","municipio":"Bauru"}'
 
-curl -X POST localhost:5080/accounts/<ACCOUNT_ID>/research
-curl localhost:5080/accounts/<ACCOUNT_ID>/evidence
-curl localhost:5080/accounts/<ACCOUNT_ID>/score
-curl localhost:5080/accounts/<ACCOUNT_ID>/cost
+api -X POST localhost:5080/accounts/<ACCOUNT_ID>/research
+api localhost:5080/accounts/<ACCOUNT_ID>/evidence
+api localhost:5080/accounts/<ACCOUNT_ID>/score
+api localhost:5080/accounts/<ACCOUNT_ID>/cost
 ```
 
 A pesquisa emite `research.completed`, que o worker consome para calcular o
@@ -122,10 +128,10 @@ Full-text em português (sem acento, com ranking e trecho destacado) e casamento
 difuso de nomes por trigrama:
 
 ```bash
-curl "localhost:5080/search/evidence?q=expansao"        # acha "expandindo" via sinônimos
-curl "localhost:5080/search/evidence?q=unidades -jornal"
-curl "localhost:5080/search/accounts?q=vento sul"
-curl "localhost:5080/accounts/<ACCOUNT_ID>/similar?threshold=0.3"
+api "localhost:5080/search/evidence?q=expansao"        # acha "expandindo" via sinônimos
+api "localhost:5080/search/evidence?q=unidades -jornal"
+api "localhost:5080/search/accounts?q=vento sul"
+api "localhost:5080/accounts/<ACCOUNT_ID>/similar?threshold=0.3"
 ```
 
 ## Documentação
