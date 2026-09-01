@@ -207,3 +207,66 @@ gerenciado como o Supabase. Por isso a expansão acontece na aplicação, em
 expansao OR aquisicao alternativa
 unidades -jornal      exclusão
 ```
+
+## O que a 0017 acrescentou — Product Matcher, People Finder e Orchestrator
+
+As três tabelas centrais desta etapa já existiam: `product_fit` e `account_scores`
+desde a `0005`, `contacts` e `contact_channels` desde a `0003` — esta última com a
+nota de que "quem popula é o People Finder". O que faltava não era tabela.
+
+**Lastro.** Nem `product_fit` nem `contacts` sabiam apontar para as evidências que
+os sustentam: a Regra 1 valia só para pesquisa e auditoria. Entram
+`product_fit_evidence` e `contact_evidence`, tabelas de ligação — e não colunas
+`uuid[]`, porque a `0015` já pagou o preço de descobrir que array não tem
+integridade referencial.
+
+`contact_evidence` carrega `claim_scope`, que as outras ligações não têm.
+`'identity'` é "esta pessoa ocupa este cargo aqui"; o nome do canal (`'email'`,
+`'phone'`) é "este canal é dela". A separação existe porque achar o nome e achar o
+e-mail são duas descobertas, e o `EvidenceFirstGuard` recusa o run quando o canal
+reaproveita a evidência da identidade — é assim que se detecta endereço deduzido do
+padrão da empresa.
+
+**Rastreabilidade de execução.** `research_run_id` e `agent_run_id` nas duas
+tabelas, fechando a mesma lacuna que a `0015` fechou em `website_audits`.
+
+**Pisos de PII no banco.** `contacts.confidence >= 0.5` e
+`contact_channels.confidence >= 0.6`, por `check`. O guard já recusa o run antes
+disso; o check cobre o caminho que o guard não vê — escrita manual, script de
+correção, carga.
+
+**`product_fit.reasons` mudou de forma.** Era um array de texto; agora é um objeto
+com `angle` (a frase do agente), `criteria` (a aritmética determinística) e
+`narrative` (os motivos com `evidence_id`). As duas metades ficam separadas porque
+têm naturezas diferentes: a aritmética precisa ter resposta mesmo quando o agente
+falha. Safras anteriores à `0017` guardam o formato antigo, e o comentário da
+coluna registra isso.
+
+**Desqualificador é sinal negativo, não tabela.** Recuperação judicial,
+encerramento e mudança de ramo viram linha em `signals` com `strength` negativa —
+é um fato datado com evidência sobre a conta, que é exatamente o que `signals`
+guarda. O check de `strength` foi aberto para `[-1, 1]`, e `-1` é o valor que a
+view lê como bloqueio.
+
+**`website_audits.portal_count`.** A `0015` gravava `multiple_portals boolean`,
+derivado de `portals[]` da saída do agente — e o array em si não sobrevivia à
+persistência, ficando só dentro de `research_runs.result`, que é JSON de auditoria
+e não de consulta. Bastava para o Opportunity Score, que só pergunta "há
+fragmentação?"; não basta para o fit de MotorHub, que separa dois canais de
+quatro. `NULL` continua sendo "não verificado", e `0` é "verificado e não há" — a
+mesma distinção que separa `false` de `null` no resto da auditoria.
+
+**`v_account_progress`.** O retrato completo para `AccountOrchestration.Decide`,
+numa leitura só. View e não seis chamadas a repositórios por uma razão de correção,
+não de desempenho: a decisão é função do retrato inteiro, e seis leituras
+independentes veem seis instantes — uma auditoria concluindo entre a terceira e a
+quarta faria a decisão sair sobre um estado que nunca existiu.
+
+Duas colunas dela merecem nota, porque são o que impede laço no Orchestrator:
+
+- `last_audited_at` marca a auditoria **tentada**, não a bem-sucedida. Site fora do
+  ar produz linha em `website_audits` de propósito, e é isso que impede um domínio
+  morto de pedir auditoria a cada evento.
+- `contacts_searched_at` responde "já procuramos?", e não "temos contatos?". Uma
+  busca que voltou vazia é um resultado; a pergunta errada faria a conta sem
+  ninguém localizável refazer a mesma busca para sempre.

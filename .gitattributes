@@ -1,0 +1,32 @@
+# ---------------------------------------------------------------------------
+# Fim de linha.
+#
+# Este repositorio e editado no Windows (core.autocrlf=true) e EXECUTADO em
+# Linux: WSL para o Hermes e para a suite de testes, e containers Debian no
+# Railway. Sem este arquivo, todo checkout converte os .sh para CRLF, e o
+# resultado nao e um aviso - e uma falha que nao menciona fim de linha:
+#
+#     /usr/bin/env: 'bash\r': No such file or directory
+#
+# No container do Railway o mesmo defeito derruba deploy/hermes-entrypoint.sh
+# antes da primeira linha, e o log so mostra o entrypoint saindo com erro.
+#
+# `text eol=lf` normaliza no commit e entrega LF no checkout, independentemente
+# do autocrlf de quem clonou.
+# ---------------------------------------------------------------------------
+
+* text=auto
+
+*.sh            text eol=lf
+*.bash          text eol=lf
+Dockerfile*     text eol=lf
+*.yaml          text eol=lf
+*.yml           text eol=lf
+
+# Migrations sao lidas por DbUp de dentro do assembly; CRLF nao quebra o SQL,
+# mas manter LF evita que uma reescrita de fim de linha apareca como arquivo
+# inteiro alterado no diff de uma migration que, por contrato, e imutavel.
+database/migrations/*.sql text eol=lf
+
+# Fixtures de agente sao comparados byte a byte em teste.
+tests/fixtures/**/*.json  text eol=lf

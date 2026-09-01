@@ -1,0 +1,131 @@
+Encontrei tres pessoas com papel de decisao. Segue o resultado:
+
+```json
+{
+  "summary": "Grupo com estrutura corporativa de verdade: diretoria comercial e de operações nomeadas na página institucional, e um responsável de TI identificado por vaga de emprego. Não há diretor de marketing — a página de equipe não lista o cargo, e a vaga aberta de marketing digital reporta ao Diretor Comercial, o que indica que marketing é subordinado a comercial nesta operação.",
+  "search_completeness": 0.75,
+  "evidence": [
+    {
+      "claim_type": "team_page",
+      "claim_text": "A página 'Quem somos' apresenta Ricardo Mautone como Diretor de Operações do grupo, com foto e biografia.",
+      "confidence": 0.92,
+      "source": {
+        "type": "website",
+        "url": "https://grupoventosul.com.br/quem-somos",
+        "title": "Quem somos — Grupo Vento Sul",
+        "observed_at": "2026-08-31T15:02:00-03:00"
+      }
+    },
+    {
+      "claim_type": "contact_page",
+      "claim_text": "A página de contato lista 'Diretoria de Operações — ricardo.mautone@grupoventosul.com.br'.",
+      "confidence": 0.9,
+      "source": {
+        "type": "website",
+        "url": "https://grupoventosul.com.br/contato",
+        "title": "Contato — Grupo Vento Sul",
+        "observed_at": "2026-08-31T15:04:00-03:00"
+      }
+    },
+    {
+      "claim_type": "professional_profile",
+      "claim_text": "Perfil profissional público identifica Ricardo Mautone como Diretor de Operações no Grupo Vento Sul desde 2021, com atividade em julho de 2026.",
+      "confidence": 0.85,
+      "source": {
+        "type": "social",
+        "url": "https://www.linkedin.com/in/ricardo-mautone",
+        "observed_at": "2026-08-31T15:08:00-03:00"
+      }
+    },
+    {
+      "claim_type": "team_page",
+      "claim_text": "A mesma página apresenta Helena Braz como Diretora Comercial do grupo.",
+      "confidence": 0.92,
+      "source": {
+        "type": "website",
+        "url": "https://grupoventosul.com.br/quem-somos",
+        "title": "Quem somos — Grupo Vento Sul",
+        "observed_at": "2026-08-31T15:02:00-03:00"
+      }
+    },
+    {
+      "claim_type": "news_mention",
+      "claim_text": "Matéria sobre a inauguração da unidade de Pelotas cita 'Helena Braz, diretora comercial do Grupo Vento Sul' e traz o telefone da diretoria comercial, (51) 3221-4400.",
+      "confidence": 0.8,
+      "source": {
+        "type": "news",
+        "url": "https://www.jornaldocomercio.com/automotivo/vento-sul-inaugura-pelotas",
+        "title": "Grupo Vento Sul inaugura unidade em Pelotas",
+        "observed_at": "2026-08-29T11:30:00-03:00"
+      }
+    },
+    {
+      "claim_type": "job_posting",
+      "claim_text": "Vaga de 'Analista de Sistemas' assinada por Tiago Werner, Gerente de Sistemas, com o e-mail ti@grupoventosul.com.br para envio de currículo.",
+      "confidence": 0.7,
+      "source": {
+        "type": "job_posting",
+        "url": "https://www.linkedin.com/jobs/view/analista-sistemas-vento-sul",
+        "title": "Analista de Sistemas — Grupo Vento Sul",
+        "observed_at": "2026-08-30T09:45:00-03:00"
+      }
+    }
+  ],
+  "contacts": [
+    {
+      "full_name": "Ricardo Mautone",
+      "job_title": "Diretor de Operações",
+      "persona": "Diretor de Operacoes",
+      "department": "operacoes",
+      "confidence": 0.92,
+      "evidence_index": 0,
+      "channels": [
+        {
+          "channel": "email",
+          "value": "ricardo.mautone@grupoventosul.com.br",
+          "confidence": 0.9,
+          "evidence_index": 1
+        },
+        {
+          "channel": "linkedin",
+          "value": "https://www.linkedin.com/in/ricardo-mautone",
+          "confidence": 0.85,
+          "evidence_index": 2
+        }
+      ]
+    },
+    {
+      "full_name": "Helena Braz",
+      "job_title": "Diretora Comercial",
+      "persona": "Diretor Comercial",
+      "department": "comercial",
+      "confidence": 0.9,
+      "evidence_index": 3,
+      "channels": [
+        {
+          "channel": "phone",
+          "value": "(51) 3221-4400",
+          "confidence": 0.75,
+          "evidence_index": 4
+        }
+      ]
+    },
+    {
+      "full_name": "Tiago Werner",
+      "job_title": "Gerente de Sistemas",
+      "persona": "Gerente de Sistemas",
+      "department": "tecnologia",
+      "confidence": 0.7,
+      "evidence_index": 5,
+      "channels": []
+    }
+  ],
+  "searched_without_result": [
+    "Diretor de Marketing",
+    "CTO",
+    "CIO"
+  ],
+}
+```
+
+Posso aprofundar em alguma delas.

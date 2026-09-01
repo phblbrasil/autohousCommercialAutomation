@@ -15,6 +15,8 @@ revisão**, que é o campo que impede um ADR de virar dogma.
 | [0007](0007-filtro-de-cnae-na-origem.md) | Filtro de CNAE na origem do seed | Aceito |
 | [0008](0008-socios-e-pii.md) | Quadro societário em tabela e migration próprias | Aceito |
 | [0009](0009-credencial-de-borda-da-revenue-api.md) | Credencial de borda da Revenue API | Aceito |
+| [0010](0010-plataforma-decide-agente-argumenta.md) | A plataforma decide o produto; o agente argumenta | Aceito |
+| [0011](0011-orchestrator-decide-por-estado.md) | Orchestrator decide por estado; dispatcher só roteia comando | Aceito |
 
 Decisões anteriores a este diretório estão descritas em prosa em
 [architecture.md](../architecture.md) e [data-model.md](../data-model.md).

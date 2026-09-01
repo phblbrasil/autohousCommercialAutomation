@@ -37,7 +37,10 @@ public sealed class AccountRepository(
              select {SelectColumns}
                from accounts a
                join companies_cnpj c on c.account_id = a.id
-              where c.cnpj = @Cnpj
+              -- cast explicito: `cnpj` e character(14) e o parametro chega como
+              -- text, o que faz o Postgres comparar `(cnpj)::text` e descartar o
+              -- indice. Ver AccountGraphRepository.FindAccountByCnpjAsync.
+              where c.cnpj = cast(@Cnpj as char(14))
              """, new { Cnpj = cnpj }, cancellationToken: ct));
 
         return row?.ToAccount();
@@ -54,7 +57,7 @@ public sealed class AccountRepository(
         await using var uow = await unitOfWork.BeginAsync(ct);
 
         var existing = await uow.Db().ExecuteScalarAsync<Guid?>(new CommandDefinition(
-            "select account_id from companies_cnpj where cnpj = @Cnpj",
+            "select account_id from companies_cnpj where cnpj = cast(@Cnpj as char(14))",
             new { Cnpj = cnpj }, uow.Tx(), cancellationToken: ct));
 
         if (existing is { } found && found != Guid.Empty)

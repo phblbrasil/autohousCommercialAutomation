@@ -61,14 +61,31 @@ public class UseCaseShapeTests
     /// adivinhar o que aconteceu — e o adaptador HTTP precisa da diferenca entre
     /// "conta suprimida" e "cooldown ativo" para escolher o status certo.
     ///
-    /// <c>ExecuteResearchRunUseCase</c> e a excecao consciente: ele roda sob o
-    /// outbox, onde a sinalizacao de falha e a excecao que dispara o
+    /// Os casos de uso que RODAM AGENTE sob o outbox sao as excecoes
+    /// conscientes: neles a sinalizacao de falha e a excecao que dispara o
     /// reagendamento com backoff.
     /// </summary>
     [Fact]
     public void Casos_de_uso_devolvem_resultado_explicito()
     {
-        string[] exempt = ["ExecuteResearchRunUseCase"];
+        // Os quatro casos de uso que rodam SOB O OUTBOX, um por agente. Em
+        // todos, a sinalizacao de falha e a excecao - e ela que dispara o
+        // reagendamento com backoff e, esgotadas as tentativas, o dead-letter.
+        // Devolver resultado aqui faria o dispatcher ter de traduzir resultado
+        // em excecao para obter o mesmo efeito.
+        //
+        // DecideNextActionUseCase NAO esta na lista, ainda que tambem rode sob
+        // o outbox: ele nao chama agente, nao tem custo e sempre tem uma
+        // resposta util - qual foi a decisao e por que. O dispatcher registra
+        // isso em log, e e o unico rastro de por que uma conta parou onde
+        // parou.
+        string[] exempt =
+        [
+            "ExecuteResearchRunUseCase",
+            "ExecuteWebsiteAuditUseCase",
+            "MatchProductsUseCase",
+            "ExecutePeopleFinderUseCase"
+        ];
 
         var offenders = UseCases
             .Where(t => !exempt.Contains(t.Name))

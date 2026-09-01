@@ -13,10 +13,18 @@ namespace AutoHous.Revenue.Agents.Tests;
 /// das respostas. Estes testes documentam as formas que o cliente aceita - se o
 /// servidor real divergir, e aqui que a divergencia fica visivel.
 ///
-/// O envelope REAL foi conferido em 20/08/2026 contra
-/// <c>gateway/platforms/api_server.py</c> da instalacao local, e esta fixado em
-/// <see cref="Extrai_texto_do_envelope_real_do_hermes_run"/>. Os outros formatos
-/// continuam cobertos por tolerancia, nao por observacao.
+/// O envelope foi conferido duas vezes, e a segunda contradisse a primeira:
+///
+/// - 20/08/2026: <c>_set_run_status</c> recebia <c>output</c> como string.
+///   Fixado em <see cref="Extrai_texto_do_envelope_real_do_hermes_run"/>.
+/// - 31/08/2026, v0.21.0: <c>output</c> nao e mais passado em call site nenhum -
+///   <c>GET /v1/runs/{id}</c> nao carrega o texto final. Fixado em
+///   <see cref="Run_que_completa_sem_texto_falha_dizendo_o_remedio"/>, e a razao
+///   de o padrao ter virado <see cref="HermesTransport.Chat"/>.
+///
+/// Os dois continuam cobertos: o primeiro porque o cliente precisa aceita-lo se
+/// o gateway voltar atras, o segundo porque e o que acontece hoje. Os demais
+/// formatos seguem cobertos por tolerancia, nao por observacao.
 /// </summary>
 public class HermesAgentRuntimeTests
 {
@@ -34,7 +42,15 @@ public class HermesAgentRuntimeTests
             ApiKey = "chave-de-teste",
             PollInterval = TimeSpan.FromMilliseconds(1),
             RetryBaseDelay = TimeSpan.FromMilliseconds(1),
-            RunTimeout = TimeSpan.FromSeconds(5)
+            RunTimeout = TimeSpan.FromSeconds(5),
+
+            // Fixado, e nao herdado do padrao. A maioria dos testes deste arquivo
+            // exercita /v1/runs, e ate aqui eles dependiam de Runs ser o default -
+            // de modo que a troca do padrao para Chat, feita porque o v0.21.0
+            // nao devolve o texto no status do run, derrubou dezoito testes que
+            // nao tinham nada a ver com a mudanca. Um teste de transporte declara
+            // o transporte que testa; os de Chat ja faziam isso.
+            Transport = HermesTransport.Runs
         };
 
         configure?.Invoke(options);
@@ -249,10 +265,11 @@ public class HermesAgentRuntimeTests
     [Fact]
     public async Task Extrai_texto_do_envelope_real_do_hermes_run()
     {
-        // Copia fiel do que _set_run_status monta no fim de um run bem-sucedido:
-        // object "hermes.run", output como STRING e usage com input/output_tokens.
-        // Enquanto o cliente so entendia output[] da Responses API, este payload
-        // voltava com RawText vazio - e o validador reprovava todo run real.
+        // Envelope conferido em 20/08/2026, quando _set_run_status ainda recebia
+        // output como STRING. Continua coberto porque o cliente precisa aceita-lo
+        // se o gateway voltar a expo-lo - mas NAO e mais o comportamento do
+        // servidor: ver Run_que_completa_sem_texto_falha_dizendo_o_remedio, que
+        // fixa o v0.21.0.
         var (runtime, _) = Build(h => h
             .Enqueue(HttpStatusCode.Accepted, """{"run_id":"run_abc123","status":"started"}""")
             .Enqueue(HttpStatusCode.OK, """{"object":"hermes.run","run_id":"run_abc123","status":"running"}""")
@@ -270,6 +287,51 @@ public class HermesAgentRuntimeTests
         Assert.Equal("run_abc123", result.ExternalRunId);
         Assert.Equal(1200, result.InputTokens);
         Assert.Equal(800, result.OutputTokens);
+    }
+
+    /// <summary>
+    /// O envelope REAL do Hermes v0.21.0, conferido em 31/08/2026 contra a
+    /// instalacao local: <c>_handle_get_run</c> devolve o dicionario de
+    /// <c>_run_statuses</c>, e nenhuma chamada a <c>_set_run_status</c> passa
+    /// <c>output</c>. O texto so passa pelo evento assistant.completed da SSE,
+    /// numa fila sem historico.
+    ///
+    /// O que este teste protege nao e a extracao - e o MODO DE FALHAR. Sem a
+    /// checagem, o run voltaria Succeeded com RawText vazio, o validador
+    /// reprovaria como contract_violation, e quem lesse o erro concluiria que o
+    /// modelo nao sabe formatar JSON. A investigacao comecaria pelo prompt e
+    /// nunca chegaria ao cliente HTTP.
+    /// </summary>
+    [Fact]
+    public async Task Run_que_completa_sem_texto_falha_dizendo_o_remedio()
+    {
+        var (runtime, _) = Build(h => h
+            .Enqueue(HttpStatusCode.Accepted, """{"run_id":"run_abc123","status":"started"}""")
+            .Enqueue(HttpStatusCode.OK, """
+                {"object":"hermes.run","run_id":"run_abc123","status":"completed",
+                 "session_id":"0199aa11-2233-4455-6677-889900aabbcc",
+                 "last_event":"run.completed",
+                 "usage":{"input_tokens":1200,"output_tokens":800,"total_tokens":2000}}
+                """));
+
+        var result = await runtime.RunAsync(Request(), TestContext.Current.CancellationToken);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("run_abc123", result.ExternalRunId);
+        Assert.Contains("sem texto", result.Error);
+        Assert.Contains("Transport = Chat", result.Error);
+    }
+
+    /// <summary>
+    /// O padrao tem que ser Chat: e o unico transporte que funciona contra o
+    /// gateway instalado. Um teste sobre o valor de um default parece excessivo
+    /// ate lembrar que o custo de errar aqui e 100% dos runs reais falhando com
+    /// uma mensagem que aponta para o lugar errado.
+    /// </summary>
+    [Fact]
+    public void O_transporte_padrao_e_chat()
+    {
+        Assert.Equal(HermesTransport.Chat, new HermesOptions().Transport);
     }
 
     [Fact]

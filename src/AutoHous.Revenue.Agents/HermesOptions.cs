@@ -18,13 +18,34 @@ public sealed class HermesOptions
     public string Model { get; set; } = "hermes-agent";
 
     /// <summary>
-    /// Transporte. "runs" usa POST /v1/runs (desenhado para sessoes longas, que e
-    /// o caso de uma pesquisa com navegacao web). "chat" usa
-    /// POST /v1/chat/completions, cujo envelope e o da OpenAI e portanto conhecido
-    /// com exatidao - util como caminho de contingencia se o envelope de /v1/runs
-    /// divergir do esperado ao ativar o Hermes real.
+    /// Transporte.
+    ///
+    /// O padrao era <see cref="HermesTransport.Runs"/>, com "chat" documentado
+    /// como contingencia caso o envelope de /v1/runs divergisse. Ao instalar o
+    /// Hermes v0.21.0 a divergencia deixou de ser hipotese, e ela e fatal:
+    ///
+    /// <c>GET /v1/runs/{id}</c> devolve o dicionario de <c>_run_statuses</c> tal
+    /// como <c>_set_run_status</c> o montou, e NENHUM call site passa
+    /// <c>output</c>. O texto final so existe no evento <c>assistant.completed</c>
+    /// da SSE, e essa fila nao guarda historico: quem faz polling ate ver
+    /// <c>status: completed</c> chega depois de o texto ter passado.
+    ///
+    /// O sintoma seria o pior possivel - <c>RawText</c> vazio em 100% dos runs,
+    /// reprovado pelo validador como <c>contract_violation</c>. A leitura obvia
+    /// disso e "o modelo nao consegue formatar JSON", e nao "o cliente le o campo
+    /// errado", de modo que a investigacao comecaria pelo prompt e nao pelo
+    /// transporte.
+    ///
+    /// <see cref="HermesTransport.Chat"/> usa POST /v1/chat/completions, cujo
+    /// envelope e o da OpenAI - <c>choices[0].message.content</c> e
+    /// <c>usage.prompt_tokens</c> - conferido na fonte instalada. E tambem o
+    /// unico dos dois que le o header X-Hermes-Session-Id, entao a correlacao com
+    /// research_run_id passa a funcionar em vez de falhar em silencio.
+    ///
+    /// Runs continua disponivel: quando o gateway voltar a expor o texto no
+    /// status, ele e o transporte melhor para sessao longa.
     /// </summary>
-    public HermesTransport Transport { get; set; } = HermesTransport.Runs;
+    public HermesTransport Transport { get; set; } = HermesTransport.Chat;
 
     /// <summary>Teto de espera por um run de pesquisa.</summary>
     public TimeSpan RunTimeout { get; set; } = TimeSpan.FromMinutes(10);

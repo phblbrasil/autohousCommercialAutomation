@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autohous.com.br/schemas/contact-discovery.v1.json",
+  "title": "Contact Discovery",
+  "description": "Saida do agente People Finder (A05). Unico contrato de agente que carrega PII de pessoa fisica, e por isso o unico com piso de confianca imposto pela plataforma alem do schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "search_completeness", "evidence"],
+
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 1500,
+      "description": "Como esta operacao se organiza: quem decide o que, e onde as pessoas aparecem publicamente."
+    },
+
+    "search_completeness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Quanto das personas pedidas voce conseguiu cobrir. Nao conseguir e um resultado legitimo - inventar nao e."
+    },
+
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 80,
+      "description": "Lastro. Cada CONTATO e cada CANAL apontam para esta lista, e para itens DIFERENTES: achar o nome e achar o e-mail sao duas descobertas.",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+
+    "contacts": {
+      "type": "array",
+      "maxItems": 25,
+      "items": { "$ref": "#/$defs/contact" }
+    },
+
+    "searched_without_result": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "Cargos que voce procurou e nao encontrou. 'Procurei diretor de marketing e nao existe' e informacao: significa que marketing e do socio.",
+      "items": { "type": "string", "minLength": 2, "maxLength": 60 }
+    }
+  },
+
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_type", "claim_text", "confidence", "source"],
+      "properties": {
+        "claim_type": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "claim_text": { "type": "string", "minLength": 3, "maxLength": 1000 },
+        "extracted_value": {},
+        "confidence": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "source": { "$ref": "#/$defs/source" }
+      }
+    },
+
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "url", "observed_at"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["company_registry", "website", "search", "social", "news", "job_posting", "marketplace", "manual", "other"]
+        },
+        "url": { "type": "string", "format": "uri" },
+        "title": { "type": ["string", "null"], "maxLength": 300 },
+        "observed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["full_name", "confidence", "evidence_index"],
+      "properties": {
+        "full_name": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 200,
+          "description": "Nome como publicado. Nao abrevie, nao complete e nao corrija grafia."
+        },
+
+        "job_title": {
+          "type": ["string", "null"],
+          "maxLength": 200,
+          "description": "Cargo como escrito na fonte. A plataforma o traduz para persona - nao traduza voce."
+        },
+
+        "persona": {
+          "type": ["string", "null"],
+          "maxLength": 60,
+          "description": "Sua sugestao de persona. A plataforma reclassifica pelo catalogo e usa a dela; este campo serve para comparar as duas leituras."
+        },
+
+        "department": { "type": ["string", "null"], "maxLength": 60 },
+
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Quanta certeza de que esta pessoa ocupa este cargo NESTA empresa HOJE. Abaixo de 0.5 a plataforma rejeita o run inteiro: omita em vez de registrar palpite."
+        },
+
+        "evidence_index": { "type": "integer", "minimum": 0 },
+
+        "channels": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/channel" }
+        }
+      }
+    },
+
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "value", "confidence", "evidence_index"],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": ["email", "phone", "mobile", "whatsapp", "linkedin"]
+        },
+
+        "value": { "type": "string", "minLength": 3, "maxLength": 300 },
+
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Abaixo de 0.6 a plataforma rejeita o run. Canal errado nao e um dado ruim: e uma mensagem enviada a um terceiro que nunca pediu para receber nada."
+        },
+
+        "evidence_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Aponte para a pagina em que O CANAL aparece, e nao para a que citava o nome. Para email, mobile e whatsapp a plataforma REJEITA o run se este indice for o mesmo do contato - e como ela detecta endereco deduzido do padrao da empresa."
+        }
+      }
+    }
+  }
+}

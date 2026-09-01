@@ -6,11 +6,15 @@ using Microsoft.Extensions.DependencyInjection;
 namespace AutoHous.Revenue.Integration.Tests;
 
 /// <summary>
-/// A cadeia de eventos do frame 02 da V2, um elo alem da pesquisa:
-/// <c>research.requested → research.completed → score.ready</c>.
+/// A cadeia de eventos do frame 02 da V2, da pesquisa ate o score.
 ///
-/// Ate esta entrega, <c>research.completed</c> era marcado como processado sem
-/// consumidor. Estes testes provam que ele agora produz score.
+/// Com o Orchestrator (A01), a cadeia deixou de ter comprimento fixo:
+/// <c>research.completed</c> vai para quem decide, e uma conta COM dominio passa
+/// pela auditoria antes de pontuar. Por isso estes testes drenam ate a
+/// CONDICAO - "existe score?" - em vez de contar saltos.
+///
+/// Contar saltos fixaria a forma da cadeia, que e exatamente o que o
+/// Orchestrator existe para poder mudar sem reescrever teste.
 /// </summary>
 public class ScoringPipelineTests : IAsyncLifetime
 {
@@ -20,7 +24,26 @@ public class ScoringPipelineTests : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         await _postgres.InitializeAsync();
-        _services = _postgres.BuildWorkerServices();
+
+        // A sonda de site e substituida por uma que nao sai para a rede. Estes
+        // testes sao sobre SCORING; a auditoria entra na cadeia porque o
+        // Orchestrator a coloca la, e deixar o HTTP real no caminho tornaria o
+        // resultado dependente de o dominio da fixture existir hoje.
+        _services = _postgres.BuildWorkerServices(services =>
+            services.AddSingleton<IWebsiteProbe>(new UnreachableProbe()));
+    }
+
+    /// <summary>
+    /// Site inalcancavel: e o resultado que a sonda real produziria para o
+    /// dominio da fixture, e o caminho de codigo que ele exercita - auditoria
+    /// gravada sem passar pelo agente - e o mesmo.
+    /// </summary>
+    private sealed class UnreachableProbe : IWebsiteProbe
+    {
+        public string Name => "unreachable-probe";
+
+        public Task<WebsiteProbeResult> ProbeAsync(string url, CancellationToken ct = default) =>
+            Task.FromResult(WebsiteProbeResult.Unreachable(url, "sonda desligada no teste", DateTimeOffset.UtcNow));
     }
 
     public async ValueTask DisposeAsync()
@@ -42,9 +65,13 @@ public class ScoringPipelineTests : IAsyncLifetime
             Get<IAccountRepository>(), Get<IOutboxRepository>(), accountId);
 
         var dispatcher = Get<OutboxDispatcher>();
+        var scores = Get<IAccountScoreRepository>();
 
-        await dispatcher.DrainOnceAsync(Ct);   // research.requested -> pesquisa
-        await dispatcher.DrainOnceAsync(Ct);   // research.completed -> score
+        await TestData.DrainUntilAsync(
+            dispatcher,
+            async () => await scores.GetCurrentAsync(accountId, Ct) is not null,
+            Ct,
+            _postgres.ConnectionString);
 
         return accountId;
     }

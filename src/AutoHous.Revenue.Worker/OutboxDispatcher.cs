@@ -74,23 +74,91 @@ public sealed class OutboxDispatcher(
         {
             switch (evt.EventType)
             {
+                // ----------------------------------------------------- comandos
+                // Rotear COMANDO por tipo e infraestrutura, e esta certo aqui:
+                // "audit.requested vai para o auditor" nao depende do estado da
+                // conta e nao e decisao de negocio.
+
                 case EventTypes.ResearchRequested:
                     await scope.ServiceProvider
                         .GetRequiredService<ExecuteResearchRunUseCase>()
                         .ExecuteAsync(evt, ct);
                     break;
 
-                case EventTypes.ResearchCompleted:
+                case EventTypes.AuditRequested:
+                    await scope.ServiceProvider
+                        .GetRequiredService<ExecuteWebsiteAuditUseCase>()
+                        .ExecuteAsync(evt, ct);
+                    break;
+
+                case EventTypes.ScoreRequested:
                     await ScoreAsync(scope, evt, ct);
                     break;
 
+                case EventTypes.MatchRequested:
+                    await scope.ServiceProvider
+                        .GetRequiredService<MatchProductsUseCase>()
+                        .ExecuteAsync(evt, ct);
+                    break;
+
+                case EventTypes.ContactsRequested:
+                    await scope.ServiceProvider
+                        .GetRequiredService<ExecutePeopleFinderUseCase>()
+                        .ExecuteAsync(evt, ct);
+                    break;
+
+                // --------------------------------------------------- conclusoes
+                // Todas vao para o MESMO consumidor, e essa e a mudanca que o
+                // Orchestrator (A01) trouxe.
+                //
+                // Antes, cada conclusao tinha seu proprio destino aqui dentro:
+                // research.completed pontuava, audit.completed pontuava de novo,
+                // score.ready nao tinha consumidor. Aquilo era politica - "o que
+                // vem depois de pesquisar?" - escrita dentro de um switch de
+                // infraestrutura, e o switch so enxergava o evento que acabara
+                // de chegar. Nao havia de onde perguntar "esta conta ja tem
+                // auditoria?", entao a cadeia era fixa por construcao.
+                //
+                // Agora a conclusao diz apenas "algo mudou nesta conta". Quem
+                // decide o proximo passo le o retrato inteiro.
+
+                case EventTypes.ResearchCompleted:
+                case EventTypes.AuditCompleted:
                 case EventTypes.ScoreReady:
-                    // Consumidor natural e o People Finder (frame 05 da V2), que
-                    // ainda nao existe. Marcar como processado evita fila entupida
-                    // sem esconder que o proximo elo esta faltando.
+                case EventTypes.ProductsMatched:
+                case EventTypes.ContactsFound:
+                    await OrchestrateAsync(scope, evt, ct);
+                    break;
+
+                // account.created NAO entra na cadeia automatica, e a ausencia e
+                // deliberada.
+                //
+                // Hoje nenhum produtor o emite - a constante existe desde a
+                // secao 19 sem uso. Quem passaria a emiti-lo e o pipeline de
+                // ingestao, e ele cria contas as centenas de milhares: liga-lo
+                // ao Orchestrator faria uma carga nacional da Receita pedir
+                // pesquisa para cada linha, o que e uma decisao de orcamento e
+                // nao de arquitetura.
+                //
+                // Entrar no funil continua sendo ato explicito - POST
+                // /accounts/{id}/research, ou um recorte de fila que alguem
+                // escolhe. O dia em que houver uma politica de admissao
+                // ("tier 1 e 2 do CNAE, no Sul, com site"), ela vira o
+                // consumidor deste evento.
+                case EventTypes.AccountCreated:
                     await MarkProcessedAsync(scope, evt, ct);
                     logger.LogInformation(
-                        "Evento {EventType} sem consumidor; marcado como processado.", evt.EventType);
+                        "Conta {AccountId} criada; entrada no funil e ato explicito.", evt.AggregateId);
+                    break;
+
+                // Fim da cadeia inbound. O consumidor e o SDR (A06), que nao
+                // existe: o evento e baixado com registro explicito de que a
+                // conta ficou pronta e nao ha quem a aborde.
+                case EventTypes.AccountReady:
+                    await MarkProcessedAsync(scope, evt, ct);
+                    logger.LogInformation(
+                        "Conta {AccountId} pronta para abordagem; sem SDR (A06) para consumir.",
+                        evt.AggregateId);
                     break;
 
                 default:
@@ -107,19 +175,64 @@ public sealed class OutboxDispatcher(
     }
 
     /// <summary>
-    /// Pesquisa concluida dispara o recalculo do Opportunity Score. O caso de uso
-    /// da baixa no evento de entrada dentro da mesma transacao em que grava o
-    /// score - marcar aqui fora abriria a janela em que o evento consta
-    /// processado e o score nao existe.
+    /// Entrega a decisao ao Orchestrator.
+    ///
+    /// O dispatcher le UM campo do payload - <c>account_id</c> - e nada mais. E
+    /// deliberado: o Orchestrator decide pelo estado da conta no banco, e nao
+    /// pelo que o evento conta. Passar o resto do payload adiante convidaria a
+    /// decisao a depender de qual evento chegou, que e exatamente o acoplamento
+    /// que esta reorganizacao desfez.
+    ///
+    /// O caso de uso da baixa no evento de entrada dentro da propria transacao
+    /// em que enfileira o comando seguinte - marcar aqui fora abriria a janela
+    /// em que o evento consta processado e o proximo passo nao foi pedido.
+    /// </summary>
+    private async Task OrchestrateAsync(IServiceScope scope, OutboxEvent evt, CancellationToken ct)
+    {
+        var payload = JsonSerializer.Deserialize<AccountEventPayload>(evt.PayloadJson);
+
+        // AggregateId como reserva: todo evento de conclusao tem a conta no
+        // agregado, e um payload malformado nao deveria parar a cadeia inteira.
+        var accountId = payload?.AccountId is { } id && id != Guid.Empty
+            ? id
+            : evt.AggregateId;
+
+        var decision = await scope.ServiceProvider
+            .GetRequiredService<DecideNextActionUseCase>()
+            .ExecuteAsync(accountId, evt.Id, ct);
+
+        logger.LogDebug(
+            "Evento {EventType} da conta {AccountId} resultou em {Action}: {Rationale}",
+            evt.EventType, accountId, decision.Action, decision.Rationale);
+    }
+
+    /// <summary>
+    /// Recalculo do Opportunity Score, pedido pelo Orchestrator.
+    ///
+    /// Le <see cref="AccountEventPayload"/>, e nao <c>ResearchCompletedPayload</c>:
+    /// os dois carregam <c>account_id</c>, mas o comando de score NAO tem
+    /// <c>research_run_id</c> - pontuar e aritmetica sobre fatos ja persistidos e
+    /// nao ganha linha em <c>research_runs</c>. Desserializar o payload do
+    /// comando num record que exige o run falha em <c>null</c>, e o dispatcher
+    /// reagenda ate o dead-letter com um erro de JSON que nao menciona a causa.
+    ///
+    /// Ler so o que se usa e o que evita esse acoplamento: quem pontua precisa da
+    /// conta, e de mais nada.
+    ///
+    /// O caso de uso da baixa no evento de entrada na mesma transacao em que
+    /// grava o score.
     /// </summary>
     private async Task ScoreAsync(IServiceScope scope, OutboxEvent evt, CancellationToken ct)
     {
-        var payload = JsonSerializer.Deserialize<ResearchCompletedPayload>(evt.PayloadJson)
-            ?? throw new InvalidOperationException($"Payload invalido no evento {evt.Id}.");
+        var payload = JsonSerializer.Deserialize<AccountEventPayload>(evt.PayloadJson);
+
+        var accountId = payload?.AccountId is { } id && id != Guid.Empty
+            ? id
+            : evt.AggregateId;
 
         var result = await scope.ServiceProvider
             .GetRequiredService<ScoreAccountUseCase>()
-            .ExecuteAsync(payload.AccountId, evt.Id, ct);
+            .ExecuteAsync(accountId, evt.Id, ct);
 
         if (result.Outcome != ScoreAccountOutcome.Scored)
         {
@@ -127,7 +240,7 @@ public sealed class OutboxDispatcher(
             // nao ha o que pontuar, e insistir so gastaria tentativas.
             logger.LogWarning(
                 "Scoring da conta {AccountId} nao aplicavel ({Outcome}); evento baixado.",
-                payload.AccountId, result.Outcome);
+                accountId, result.Outcome);
 
             await MarkProcessedAsync(scope, evt, ct);
         }

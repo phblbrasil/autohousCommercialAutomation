@@ -134,7 +134,7 @@ public sealed class ScoreAccountUseCase(
     private static ScoringInputs ToInputs(AccountScoringFacts facts, DateTimeOffset now) => new()
     {
         ReferenceDate = now,
-        Operation = ParseOperation(facts.Segment),
+        Operation = CnaeCatalog.FromSegment(facts.Segment),
         StoreCount = facts.StoreCount,
         InventoryEstimate = facts.InventoryEstimate,
         CnpjCount = Math.Max(facts.CnpjCount, 1),
@@ -145,25 +145,6 @@ public sealed class ScoreAccountUseCase(
         Contacts = facts.Contacts
     };
 
-    /// <summary>
-    /// <c>accounts.segment</c> e texto livre: o pipeline de ingestao grava o
-    /// rotulo derivado do CNAE, mas o Researcher tambem pode sobrescrever com o
-    /// que encontrou no site. Nao reconhecer o valor deixa a dimensao como nao
-    /// observada em vez de chutar.
-    /// </summary>
-    private static AutomotiveOperation? ParseOperation(string? segment) =>
-        segment?.Trim().ToLowerInvariant() switch
-        {
-            "concessionaria" => AutomotiveOperation.Concessionaria,
-            "revenda" => AutomotiveOperation.Revenda,
-            "atacado" => AutomotiveOperation.Atacado,
-            "intermediacao" => AutomotiveOperation.Intermediacao,
-            "oficina" => AutomotiveOperation.Oficina,
-            "autopecas" => AutomotiveOperation.Autopecas,
-            "motos" => AutomotiveOperation.Motos,
-            "locadora" => AutomotiveOperation.Locadora,
-            _ => null
-        };
 }
 
 public sealed record ResearchCompletedPayload

@@ -112,6 +112,13 @@ ScoreAccountUseCase  ── determinístico, sem agente, custo zero
 account_scores + accounts.tier + accounts.status → score.ready
 ```
 
+Toda **conclusão** volta para o Orchestrator (A01), que lê o estado da conta e
+emite o **comando** seguinte — auditar, pontuar, casar produto, buscar contato ou
+marcar pronta. O worker roteia comando por tipo, que é infraestrutura; a decisão
+do que vem depois é política e vive em `AccountOrchestration.Decide`, função pura
+no domínio. Ver
+[ADR-0011](docs/adr/0011-orchestrator-decide-por-estado.md).
+
 A API **nunca** chama o Hermes de forma síncrona.
 
 | Projeto | Responsabilidade |
@@ -125,6 +132,7 @@ A API **nunca** chama o Hermes de forma síncrona.
 | `AutoHous.Revenue.Ingestor` | CLI de captura: `receita` (fonte oficial) e `arquivo` (extrato). |
 | `AutoHous.Revenue.ReceitaFederal` | Fonte oficial de CNPJ: WebDAV, zip, ISO-8859-1, layout posicional. |
 | `AutoHous.Revenue.Migrator` | DbUp sobre SQL puro. |
+| `AutoHous.Revenue.WebAudit` | Sonda de site do A03: HTTP e HTML. Não referencia Npgsql. |
 | `AutoHous.Revenue.Mcp` | MCP read-only. Não referencia Npgsql. |
 
 As direções de dependência são impostas por `AutoHous.Revenue.Architecture.Tests`,

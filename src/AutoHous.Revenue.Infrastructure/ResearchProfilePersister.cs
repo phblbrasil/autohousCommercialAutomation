@@ -31,15 +31,7 @@ public sealed class ResearchProfilePersister(
 
         // 1. Fontes e evidencias. O indice em evidence[] vira id real aqui; e o
         //    mapa que permite marcas, lojas e sinais referenciarem seu lastro.
-        var evidenceIds = new Guid[profile.Evidence.Count];
-
-        for (var i = 0; i < profile.Evidence.Count; i++)
-        {
-            var claim = profile.Evidence[i];
-            var sourceId = await UpsertSourceAsync(uow, claim, ct);
-
-            evidenceIds[i] = await InsertEvidenceAsync(uow, request.AccountId, sourceId, claim, ct);
-        }
+        var evidenceIds = await EvidenceWriter.WriteAllAsync(uow, request.AccountId, profile.Evidence, ct);
 
         // 2. Marcas.
         foreach (var brand in profile.Brands)
@@ -113,7 +105,7 @@ public sealed class ResearchProfilePersister(
                     signal.Title,
                     signal.Description,
                     EvidenceId = evidenceIds[signal.EvidenceIndex],
-                    signal.ObservedAt
+                    ObservedAt = Timestamps.ForPostgres(signal.ObservedAt)
                 }, uow.Tx(), cancellationToken: ct));
         }
 
@@ -173,74 +165,4 @@ public sealed class ResearchProfilePersister(
 
         await uow.CommitAsync(ct);
     }
-
-    /// <summary>
-    /// Deduplica fontes. Ate armazenarmos o conteudo buscado, a URL normalizada
-    /// e a identidade do documento - repesquisar a mesma pagina reusa a linha.
-    /// </summary>
-    private static async Task<Guid> UpsertSourceAsync(
-        IUnitOfWork uow, EvidenceClaim claim, CancellationToken ct)
-    {
-        var url = claim.Source.Url.Trim();
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(url.ToLowerInvariant())));
-
-        var existing = await uow.Db().ExecuteScalarAsync<Guid?>(new CommandDefinition(
-            "select id from sources where content_hash = @Hash",
-            new { Hash = hash }, uow.Tx(), cancellationToken: ct));
-
-        if (existing is { } found) return found;
-
-        var id = Guid.CreateVersion7();
-
-        await uow.Db().ExecuteAsync(new CommandDefinition("""
-            insert into sources (id, source_type, url, title, domain, observed_at, content_hash)
-            values (@Id, @SourceType::evidence_type, @Url, @Title, @Domain, @ObservedAt, @Hash)
-            -- sources_content_hash_uq e um indice PARCIAL; a inferencia de
-            -- ON CONFLICT sobre indice parcial exige repetir o predicado.
-            on conflict (content_hash) where content_hash is not null do nothing
-            """,
-            new
-            {
-                Id = id,
-                SourceType = claim.Source.Type,
-                Url = url,
-                claim.Source.Title,
-                Domain = SafeHost(url),
-                claim.Source.ObservedAt,
-                Hash = hash
-            }, uow.Tx(), cancellationToken: ct));
-
-        return await uow.Db().ExecuteScalarAsync<Guid>(new CommandDefinition(
-            "select id from sources where content_hash = @Hash",
-            new { Hash = hash }, uow.Tx(), cancellationToken: ct));
-    }
-
-    private static async Task<Guid> InsertEvidenceAsync(
-        IUnitOfWork uow, Guid accountId, Guid sourceId, EvidenceClaim claim, CancellationToken ct)
-    {
-        var id = Guid.CreateVersion7();
-
-        await uow.Db().ExecuteAsync(new CommandDefinition("""
-            insert into evidence
-                (id, account_id, source_id, claim_type, claim_text, extracted_value, confidence, valid_from)
-            values
-                (@Id, @AccountId, @SourceId, @ClaimType, @ClaimText, @ExtractedValue::jsonb, @Confidence, @ValidFrom)
-            """,
-            new
-            {
-                Id = id,
-                AccountId = accountId,
-                SourceId = sourceId,
-                claim.ClaimType,
-                claim.ClaimText,
-                ExtractedValue = claim.ExtractedValue?.GetRawText(),
-                claim.Confidence,
-                ValidFrom = claim.Source.ObservedAt
-            }, uow.Tx(), cancellationToken: ct));
-
-        return id;
-    }
-
-    private static string? SafeHost(string url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.Host : null;
 }

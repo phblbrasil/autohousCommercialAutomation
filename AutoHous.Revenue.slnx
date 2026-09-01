@@ -8,6 +8,7 @@
     <Project Path="src/AutoHous.Revenue.Infrastructure/AutoHous.Revenue.Infrastructure.csproj" />
     <Project Path="src/AutoHous.Revenue.Mcp/AutoHous.Revenue.Mcp.csproj" />
     <Project Path="src/AutoHous.Revenue.ReceitaFederal/AutoHous.Revenue.ReceitaFederal.csproj" />
+    <Project Path="src/AutoHous.Revenue.WebAudit/AutoHous.Revenue.WebAudit.csproj" />
     <Project Path="src/AutoHous.Revenue.Migrator/AutoHous.Revenue.Migrator.csproj" />
     <Project Path="src/AutoHous.Revenue.Worker/AutoHous.Revenue.Worker.csproj" />
   </Folder>

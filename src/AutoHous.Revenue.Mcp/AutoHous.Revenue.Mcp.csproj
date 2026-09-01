@@ -8,6 +8,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Somente o Dominio. Ele e livre de I/O - zero PackageReference -, entao
+         referencia-lo nao abre caminho para o banco: DependencyRuleTests continua
+         impondo que o MCP nao alcance Npgsql, Dapper nem a Infrastructure. -->
+    <ProjectReference Include="..\AutoHous.Revenue.Domain\AutoHous.Revenue.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />

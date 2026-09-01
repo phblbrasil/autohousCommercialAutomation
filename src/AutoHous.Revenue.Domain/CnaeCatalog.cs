@@ -174,4 +174,33 @@ public static class CnaeCatalog
         AutomotiveOperation.Locadora => "locadora",
         _ => "outro"
     };
+
+    /// <summary>
+    /// O inverso de <see cref="ToSegment"/>: le <c>accounts.segment</c> de volta.
+    ///
+    /// A coluna e texto livre - a ingestao grava o rotulo derivado do CNAE, e o
+    /// Researcher pode sobrescrever com o que encontrou no site -, entao um
+    /// valor nao reconhecido devolve <c>null</c>. Nulo deixa a dimensao como NAO
+    /// OBSERVADA em quem consome, que e honesto; um <c>_ =&gt; Revenda</c> aqui
+    /// faria toda conta de segmento estranho pontuar como revenda sem que
+    /// ninguem soubesse.
+    ///
+    /// Vive junto do <see cref="ToSegment"/> de proposito. Enquanto os dois
+    /// estiverem no mesmo arquivo, acrescentar uma operacao nova sem ensinar o
+    /// sistema a le-la de volta e um descuido visivel; com o parser copiado
+    /// dentro de cada caso de uso, seria um bug silencioso em um deles.
+    /// </summary>
+    public static AutomotiveOperation? FromSegment(string? segment) =>
+        segment?.Trim().ToLowerInvariant() switch
+        {
+            "concessionaria" => AutomotiveOperation.Concessionaria,
+            "revenda" => AutomotiveOperation.Revenda,
+            "atacado" => AutomotiveOperation.Atacado,
+            "intermediacao" => AutomotiveOperation.Intermediacao,
+            "oficina" => AutomotiveOperation.Oficina,
+            "autopecas" => AutomotiveOperation.Autopecas,
+            "motos" => AutomotiveOperation.Motos,
+            "locadora" => AutomotiveOperation.Locadora,
+            _ => null
+        };
 }

@@ -1,3 +1,4 @@
+using AutoHous.Revenue.Domain;
 using System.ComponentModel;
 using System.Text.Json;
 using ModelContextProtocol.Server;
@@ -49,17 +50,27 @@ public sealed class RevenueTools(RevenueApiClient api)
     [Description("Retorna o catalogo de produtos da AutoHous com o problema que cada um resolve e as personas-alvo.")]
     public Task<string> GetProductCatalogAsync(CancellationToken ct = default)
     {
-        // Catalogo estatico: nao depende do estado do banco e nao justifica uma
+        // Le do DOMINIO, e nao de uma lista propria.
+        //
+        // Ate o Product Matcher (A04) existir, a lista morava aqui e nao havia
+        // problema: nada mais no sistema precisava saber quais eram os produtos.
+        // Agora ProductFitScoring calcula o fit por produto e o
+        // EvidenceFirstGuard recusa persona fora do catalogo daquele produto - e
+        // duas listas significariam o agente enxergando um catalogo e a
+        // plataforma validando contra outro.
+        //
+        // O sintoma dessa divergencia seria dos piores: um pitch bem escrito,
+        // com a persona que a ferramenta MCP anunciou, rejeitado pelo guard com
+        // "nao e persona deste produto". O erro apareceria como falha do modelo.
+        //
+        // Estatico ainda: nao depende do estado do banco e nao justifica uma
         // chamada de rede. Sai daqui quando houver tabela de produtos.
-        var catalog = new[]
+        var catalog = ProductCatalog.All.Select(p => new
         {
-            new { product = "FrontCar",        solves = "Site, vitrine de estoque, ofertas e landing pages", personas = new[] { "Diretor de Marketing", "Gerente de Marketing", "Diretor Comercial", "Head Digital", "Socio" } },
-            new { product = "MotorHub",        solves = "Integracao e distribuicao de estoque entre unidades e canais", personas = new[] { "CTO", "CIO", "Head de TI", "Gerente de Sistemas", "Diretor de Operacoes" } },
-            new { product = "AutoFollow",      solves = "Follow-up e gestao de leads comerciais", personas = new[] { "Diretor Comercial", "Gerente Comercial", "CRM Manager", "BDC Manager" } },
-            new { product = "AutoTalk",        solves = "Atendimento e conversacao com o cliente", personas = new[] { "Diretor Comercial", "CX", "Operacoes", "Atendimento" } },
-            new { product = "BoxTech",         solves = "Plataforma tecnologica para operacoes maiores", personas = new[] { "CIO", "CTO", "Head de Digital", "Diretor de Tecnologia" } },
-            new { product = "Partner Program", solves = "Canal via agencias e integradores", personas = new[] { "Socio de agencia", "Head de Novos Negocios" } }
-        };
+            product = p.Name,
+            solves = p.Solves,
+            personas = p.Personas
+        });
 
         return Task.FromResult(JsonSerializer.Serialize(catalog));
     }

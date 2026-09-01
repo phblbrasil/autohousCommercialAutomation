@@ -14,8 +14,11 @@ import pathlib
 path = pathlib.Path(os.environ["ENV_FILE"])
 
 valores = {
-    "HERMES_API_SERVER_KEY": os.environ["HERMES_KEY"],
-    "REVENUE_API_KEY": os.environ["REVENUE_KEY"],
+    "HERMES_API_SERVER_KEY": os.environ["HERMES_KEY"].strip(),
+    # .strip() e a segunda linha de defesa: um \r vindo de um .env com CRLF
+    # entraria aqui no VALOR, e a linha reescrita sairia como
+    # `REVENUE_API_KEY=<chave>\r\n` - chave invalida em header HTTP.
+    "REVENUE_API_KEY": os.environ["REVENUE_KEY"].strip(),
 }
 
 saida: list[str] = []

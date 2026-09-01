@@ -102,9 +102,42 @@ research.completed
 
 Detalhes em [scoring.md](scoring.md).
 
-`score.ready` ainda não tem consumidor — o próximo elo é o People Finder. O
-dispatcher marca o evento como processado e registra em log que falta o
-consumidor, em vez de entupir a fila em silêncio.
+### A cadeia completa, depois do Orchestrator
+
+O dispatcher deixou de decidir o que vem depois de cada conclusão. Ele roteia
+**comandos** — isso é infraestrutura e continua correto — e entrega toda
+**conclusão** ao mesmo consumidor, que lê o estado da conta e emite o comando
+seguinte.
+
+```
+                      ┌──────────────────────────────────────┐
+  conclusões  ────────►  DecideNextActionUseCase (A01)        │
+  research.completed  │  lê v_account_progress numa leitura   │
+  audit.completed     │  AccountOrchestration.Decide (puro)   │
+  score.ready         └──────────────┬───────────────────────┘
+  products.matched                   │ emite UM comando
+  contacts.found                     ▼
+                      research.requested  → Researcher      (A02)
+                      audit.requested     → Website Auditor (A03)
+                      score.requested     → OpportunityScoring
+                      match.requested     → Product Matcher (A04)
+                      contacts.requested  → People Finder   (A05)
+                      account.ready       → SDR (A06, ausente)
+```
+
+A ordem das etapas deixou de estar espalhada por cinco casos de uso, e uma conta
+que chega pelo meio — importada já com pesquisa, ou reprocessada depois de um
+sinal novo — retoma no ponto certo em vez de recomeçar.
+
+`account.ready` é o único que ainda não tem consumidor: o SDR (A06) não existe. O
+dispatcher o marca como processado e registra em log, em vez de entupir a fila em
+silêncio.
+
+**`account.created` não entra na cadeia automática.** Nenhum produtor o emite
+hoje; quem passaria a emiti-lo é o pipeline de ingestão, que cria contas às
+centenas de milhares. Ligá-lo ao Orchestrator faria uma carga nacional da Receita
+pedir pesquisa para cada linha — decisão de orçamento, não de arquitetura. Entrar
+no funil continua sendo ato explícito.
 
 ## Decisões que se afastam do blueprint
 
@@ -127,8 +160,18 @@ garantir isso. Entram quando houver fluxo interativo que as justifique.
 **Roteador de evento não é orquestrador.** O `OutboxDispatcher` roteia por
 `event_type`; o Orchestrator do frame 05 da V2 *decide o próximo passo a partir do
 estado da conta*. São coisas diferentes: o roteador é infraestrutura, o
-orquestrador é política. Quando o segundo existir, ele é um caso de uso — não um
-`switch` maior no dispatcher.
+orquestrador é política.
+
+Isso está resolvido: `AccountOrchestration.Decide` é função pura no domínio e
+`DecideNextActionUseCase` escreve o efeito dela. A separação entre **comando** e
+**conclusão** é o que permitiu tirar a política do `switch` sem esvaziar o
+dispatcher: rotear `audit.requested` para o auditor não depende do estado da
+conta e continua onde estava.
+
+O que saiu de lá foi a regra de que pesquisa concluída significa pontuar. Ela era
+política escrita dentro de um adaptador — e, pior, o `switch` só enxergava o
+evento que acabara de chegar, então não havia de onde perguntar "esta conta já
+tem auditoria?". A cadeia era fixa por construção.
 
 ## Por que o custo é instrumentado desde já
 

@@ -1,0 +1,137 @@
+Claro! Analisei o diagnostico e montei o argumento comercial.
+
+```json
+{
+  "summary": "Grupo com seis unidades e três CNPJs publicando o mesmo estoque no site próprio, na Webmotors e no iCarros, com contagem divergente entre os três. A dor central é de distribuição de estoque, não de site: a vitrine própria funciona e tem filtro, mas cada alteração de preço é feita três vezes à mão. O produto de entrada é MotorHub; FrontCar entra como segunda conversa, sustentado pela ausência de simulador e de avaliação de usado na vitrine.",
+  "evidence": [
+    {
+      "claim_type": "inventory_divergence",
+      "claim_text": "A vitrine própria exibe 380 veículos ('Página 1 de 32', 12 por página); a página do grupo na Webmotors mostra 344 anúncios ativos no mesmo dia.",
+      "extracted_value": {
+        "site": 380,
+        "webmotors": 344
+      },
+      "confidence": 0.85,
+      "source": {
+        "type": "marketplace",
+        "url": "https://www.webmotors.com.br/loja/grupo-vento-sul",
+        "title": "Grupo Vento Sul na Webmotors",
+        "observed_at": "2026-08-31T14:32:00-03:00"
+      }
+    },
+    {
+      "claim_type": "store_count",
+      "claim_text": "A página 'Nossas lojas' lista seis unidades: Porto Alegre (duas), Canoas, Caxias do Sul, Passo Fundo e Pelotas.",
+      "extracted_value": {
+        "stores": 6
+      },
+      "confidence": 0.95,
+      "source": {
+        "type": "website",
+        "url": "https://grupoventosul.com.br/lojas",
+        "title": "Nossas lojas",
+        "observed_at": "2026-08-31T14:18:00-03:00"
+      }
+    },
+    {
+      "claim_type": "marketplace_listing",
+      "claim_text": "O rodapé do site liga para as vitrines do grupo na Webmotors e no iCarros, além do estoque próprio.",
+      "confidence": 0.9,
+      "source": {
+        "type": "website",
+        "url": "https://grupoventosul.com.br/",
+        "observed_at": "2026-08-31T14:15:00-03:00"
+      }
+    },
+    {
+      "claim_type": "conversion_gap",
+      "claim_text": "A página de detalhe do veículo oferece apenas WhatsApp e formulário de contato: não há simulador de financiamento nem avaliação de usado para troca.",
+      "confidence": 0.8,
+      "source": {
+        "type": "website",
+        "url": "https://seminovos.grupoventosul.com.br/veiculo/onix-2022",
+        "title": "Chevrolet Onix 2022",
+        "observed_at": "2026-08-31T14:26:00-03:00"
+      }
+    },
+    {
+      "claim_type": "job_posting",
+      "claim_text": "Vaga aberta para 'Analista de Marketing Digital - Grupo Vento Sul', com a atribuição de 'manter os anúncios atualizados nos portais'.",
+      "confidence": 0.75,
+      "source": {
+        "type": "job_posting",
+        "url": "https://www.linkedin.com/jobs/view/analista-marketing-digital-vento-sul",
+        "title": "Analista de Marketing Digital",
+        "observed_at": "2026-08-30T09:40:00-03:00"
+      }
+    }
+  ],
+  "pitches": [
+    {
+      "product": "MotorHub",
+      "angle": "Vocês publicam o mesmo estoque no site, na Webmotors e no iCarros. Hoje o site mostra 380 carros e a Webmotors, 344 — a diferença é o trabalho manual que sobrou no meio.",
+      "reasons": [
+        {
+          "text": "Seis unidades alimentando três vitrines: cada alteração de preço acontece três vezes, e a que atrasa deixa um anúncio de carro já vendido no ar.",
+          "evidence_index": 0
+        },
+        {
+          "text": "A operação tem porte para isso doer: seis lojas em cinco cidades, todas publicando no mesmo conjunto de canais.",
+          "evidence_index": 1
+        },
+        {
+          "text": "A própria empresa reconhece o custo: há vaga aberta cuja atribuição explícita é manter os anúncios atualizados nos portais.",
+          "evidence_index": 4
+        }
+      ],
+      "objections": [
+        {
+          "text": "Os portais já sincronizam sozinhos com nosso sistema.",
+          "response": "Vale conferir por canal: no dia da observação a contagem do site e a da Webmotors não batiam. Sincronizar um canal e não os outros é o caso mais comum, e é justamente o que produz a divergência.",
+          "evidence_index": 0
+        },
+        {
+          "text": "Já temos alguém cuidando disso.",
+          "response": "É o que a vaga indica. A pergunta não é se alguém cuida, é quanto do dia dessa pessoa vai para republicar o mesmo carro em três lugares.",
+          "evidence_index": 4
+        }
+      ],
+      "recommended_personas": [
+        "Diretor de Operacoes",
+        "Head de TI",
+        "Gerente de Sistemas"
+      ],
+      "confidence": 0.85
+    },
+    {
+      "product": "FrontCar",
+      "angle": "A vitrine de vocês tem filtro e foto, mas quem escolhe um carro lá não consegue simular o financiamento nem colocar o usado na troca sem sair da página.",
+      "reasons": [
+        {
+          "text": "A página de detalhe oferece só WhatsApp e formulário: o visitante decidido a comprar precisa mudar de canal para responder as duas perguntas que travam a compra.",
+          "evidence_index": 3
+        },
+        {
+          "text": "O volume justifica a perda: são cerca de 380 veículos publicados, e o atrito se aplica a todos.",
+          "evidence_index": 0
+        }
+      ],
+      "objections": [
+        {
+          "text": "Nosso site é novo, refizemos ano passado.",
+          "response": "A vitrine funciona bem no que faz — filtro, detalhe e foto estão lá. O que falta são os dois caminhos de conversão, e isso se acrescenta sem refazer o site.",
+          "evidence_index": 3
+        }
+      ],
+      "recommended_personas": [
+        "Diretor de Marketing",
+        "Diretor Comercial"
+      ],
+      "confidence": 0.7
+    }
+  ],
+  "disqualifiers": [],
+}
+```
+
+Se quiser, posso detalhar mais alguma das objecoes.

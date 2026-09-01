@@ -25,6 +25,23 @@ internal static class ReceitaCommand
     {
         var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("Receita");
 
+        // Retomada: o lote ja foi capturado, entao nao ha origem para consultar,
+        // zip para ler nem linha crua para gravar. So falta decidir onde cada
+        // linha pendente entra no account graph.
+        //
+        // Vem ANTES de tudo de proposito - inclusive antes do modo offline -
+        // porque este e o unico caminho do comando que nao depende de arquivo
+        // nenhum, nem local nem remoto.
+        if (options.ResolveBatch is { } batchId)
+        {
+            logger.LogInformation(
+                "Retomando a resolucao do lote {BatchId}. Download, leitura e captura sao pulados.",
+                batchId);
+
+            var resumed = await AccountGraphStep.ResumeAsync(provider, batchId, logger, ct);
+            return resumed.ExitCode;
+        }
+
         // Offline: nao ha origem para consultar, e o release ja veio obrigatorio
         // do parser. Listar competencias nesse modo seria pedir rede justamente
         // para quem disse que nao tem.

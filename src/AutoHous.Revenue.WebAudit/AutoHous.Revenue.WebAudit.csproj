@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>AutoHous.Revenue.WebAudit</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Adaptador da sonda de site, no mesmo lugar estrutural que
+       AutoHous.Revenue.ReceitaFederal ocupa para a fonte de CNPJ: ele conhece
+       HTTP e HTML, e nao conhece persistencia. DependencyRuleTests impoe isso.
+
+       Vive fora da Infrastructure de proposito. Quando o headless browser
+       entrar - a peca que a gap-analysis chama de "a maior de infraestrutura
+       nova" -, ele traz Playwright e uns 300 MB de Chromium junto; ter isso
+       dentro do assembly que a API referencia para falar com o Postgres seria
+       arrastar um browser para dentro de um processo que nunca vai abrir um. -->
+  <ItemGroup>
+    <ProjectReference Include="..\AutoHous.Revenue.Application\AutoHous.Revenue.Application.csproj" />
+    <ProjectReference Include="..\AutoHous.Revenue.Domain\AutoHous.Revenue.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

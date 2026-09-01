@@ -20,10 +20,23 @@ dotnet run --project src/AutoHous.Revenue.Migrator     # aplica as migrations
 ./scripts/test.sh                                      # suíte completa
 ```
 
-> `dotnet test` roda os 416 testes — mas **nunca com `--nologo`**. Com o runner
-> Microsoft.Testing.Platform eleito no `global.json`, essa flag faz o host
-> localizar os módulos e não iniciar nenhum: "Zero testes executados", código 5.
-> `scripts/test.sh` fixa a invocação correta.
+> Rode a suíte pelo `scripts/test.sh`, não pelo `dotnet test` cru. São 433
+> testes, e o script existe por dois motivos.
+>
+> O primeiro: com o runner Microsoft.Testing.Platform eleito no `global.json`,
+> `--nologo` faz o host localizar os módulos e não iniciar nenhum — "Zero testes
+> executados", código 5. O script fixa a invocação correta.
+>
+> O segundo: um módulo cujo host não inicia **não aparece no sumário**. A
+> contagem final o ignora inteiro e a suíte fica verde com uma bateria
+> desligada. O script confere quem reportou e roda direto, pelo `dotnet`, quem
+> faltou.
+
+> Os testes de integração sobem um Postgres efêmero por classe via
+> Testcontainers. Onde isso não roda com o Docker saudável do lado — o Smart App
+> Control do Windows bloqueia o `Docker.DotNet.dll` no load —, preencha
+> `REVENUE_TEST_DB_CONNECTION` no `.env` apontando para o servidor do compose:
+> cada classe passa a criar e destruir um banco próprio nele.
 
 ## Captura de contas
 
@@ -128,11 +141,47 @@ Full-text em português (sem acento, com ranking e trecho destacado) e casamento
 difuso de nomes por trigrama:
 
 ```bash
-api "localhost:5080/search/evidence?q=expansao"        # acha "expandindo" via sinônimos
-api "localhost:5080/search/evidence?q=unidades -jornal"
+api "localhost:5080/search/evidence?q=unidades"         # acha "unidade" e "unidades"
+api "localhost:5080/search/evidence?q=unidades -jornal" # exclui um termo
 api "localhost:5080/search/accounts?q=vento sul"
 api "localhost:5080/accounts/<ACCOUNT_ID>/similar?threshold=0.3"
 ```
+
+O stemmer português dá stems diferentes para substantivo e verbo da mesma
+família — `expansão` vira `expansa`, `expandindo` vira `expand` —, então
+[SearchQueryExpander](src/AutoHous.Revenue.Domain/SearchQueryExpander.cs)
+acrescenta os sinônimos do domínio antes da consulta virar `tsquery`: quem busca
+`expansao` também alcança "o grupo está expandindo". A conta de exemplo não
+exercita isso — a evidência de expansão dela fala em "inauguração" —, quem prova
+é `FullTextSearchTests.Expansao_de_sinonimo_alcanca_a_forma_verbal`.
+
+## A cadeia de agentes
+
+Quatro dos seis agentes do §17 do blueprint existem. O que os encadeia não é uma
+sequência fixa: é o Orchestrator, que lê o estado da conta e decide o próximo
+passo.
+
+```
+conclusão de qualquer etapa
+        ↓
+  Orchestrator (A01)  ── lê v_account_progress, decide, emite UM comando
+        ↓
+  Researcher (A02)  →  Website Auditor (A03)  →  Opportunity Score
+        ↓                                              ↓
+  People Finder (A05)  ←  Product Matcher (A04)  ←  ────┘
+        ↓
+  account.ready   →   SDR (A06) — não existe ainda
+```
+
+Em três dos quatro, o modelo produz **fatos e texto**; a aritmética é da
+plataforma. O Product Matcher leva isso ao extremo e inverte a ordem: a nota e a
+porta de entrada são calculadas **antes** da chamada ao modelo, que recebe o
+diagnóstico pronto e escreve o argumento. Ver
+[ADR-0010](docs/adr/0010-plataforma-decide-agente-argumenta.md) e
+[ADR-0011](docs/adr/0011-orchestrator-decide-por-estado.md).
+
+O que falta — SDR, Reply Analyst, CRM Agent — depende de canal de saída, que não
+existe.
 
 ## Documentação
 
@@ -162,7 +211,7 @@ src/
   Ingestor         CLI de captura
   Migrator         DbUp
   Mcp              MCP read-only, fala HTTP com a API
-hermes/                schema, prompt versionado, skill, config de exemplo
+hermes/                schemas, prompts versionados e skills — um conjunto por agente
 tests/                 domínio · aplicação · agentes · arquitetura · integração
 ```
 

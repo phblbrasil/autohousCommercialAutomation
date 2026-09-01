@@ -141,4 +141,45 @@ public static class EventTypes
     public const string ResearchCompleted = "research.completed";
     public const string AccountCreated = "account.created";
     public const string ScoreReady = "score.ready";
+
+    /// <summary>
+    /// Website Auditor (A03). Tipos proprios, e nao um <c>depth</c> dentro de
+    /// research.requested: sao runs com contrato de saida, custo e ciclo de vida
+    /// diferentes. Fundi-los obrigaria o dispatcher a escolher o agente lendo o
+    /// payload - o acoplamento que o roteamento por tipo de evento evita.
+    /// </summary>
+    public const string AuditRequested = "audit.requested";
+
+    public const string AuditCompleted = "audit.completed";
+
+    /// <summary>
+    /// Recalculo de score pedido pelo Orchestrator (A01).
+    ///
+    /// Ate ele existir, <c>ScoreAccountUseCase</c> consumia
+    /// <c>research.completed</c> e <c>audit.completed</c> diretamente - o
+    /// dispatcher decidia, por tipo de evento, que pesquisa concluida significa
+    /// pontuar. Isso e politica dentro de um <c>switch</c> de infraestrutura.
+    ///
+    /// Com o comando proprio, o scoring passa a ser um passo que ALGUEM pede, e
+    /// quem pede e a unica peca que conhece o estado da conta inteira.
+    /// </summary>
+    public const string ScoreRequested = "score.requested";
+
+    /// <summary>Product Matcher (A04).</summary>
+    public const string MatchRequested = "match.requested";
+
+    public const string ProductsMatched = "products.matched";
+
+    /// <summary>People Finder (A05).</summary>
+    public const string ContactsRequested = "contacts.requested";
+
+    public const string ContactsFound = "contacts.found";
+
+    /// <summary>
+    /// Fim da cadeia inbound: a conta tem retrato, auditoria, score, produto e
+    /// contato. O consumidor natural e o SDR (A06), que nao existe - e o evento
+    /// fica pendente ate existir, em vez de a conta parar sem registro de que
+    /// estava pronta.
+    /// </summary>
+    public const string AccountReady = "account.ready";
 }

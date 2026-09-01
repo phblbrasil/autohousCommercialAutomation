@@ -141,6 +141,8 @@ static void PrintUsage() => Console.Error.WriteLine(
           --work-dir  <caminho>        onde o spool fica.  Padrao: .receita-work
           --keep-spool                 nao apaga o spool ao final
           --offline                    usa so o que ja esta no cache; exige --release
+          --resolve-batch <uuid>       retoma a resolucao de um lote ja capturado;
+                                       pula download, leitura e captura
 
     arquivo — extrato delimitado (modo padrao quando o subcomando e omitido)
 

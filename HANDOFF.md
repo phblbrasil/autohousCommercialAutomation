@@ -1,0 +1,222 @@
+# HANDOFF — onde paramos
+
+> **Leia este arquivo antes de começar qualquer trabalho neste repositório.**
+> Ele é a fonte da verdade sobre o estado atual: o que está pronto, o que está no
+> meio do caminho e o que decidimos deliberadamente não fazer.
+>
+> **Ao terminar uma sessão de trabalho, atualize-o.** Um handoff desatualizado é
+> pior que nenhum — ele faz a próxima pessoa confiar em algo que já mudou.
+
+**Última atualização:** 01/09/2026
+**Branch:** `feat/website-auditor-e-carga-receita`
+
+---
+
+## 1. Estado em uma tela
+
+| | |
+|---|---|
+| Testes | **545/545** verdes |
+| Migrations aplicadas no banco de dev | **16** de 17 — a `0017` ainda não rodou |
+| Carga da Receita `2026-08` | ✅ **concluída** |
+| Website Auditor (A03) | ✅ fatia completa, testada ponta a ponta |
+| Orchestrator (A01), Product Matcher (A04), People Finder (A05) | 🟡 código presente, ver §5 |
+| Hermes real (`AGENT_RUNTIME=hermes`) | ❌ nunca executou — falta credencial de modelo |
+| Railway | ❌ escrito, nunca construído |
+
+---
+
+## 2. A base está carregada
+
+```
+accounts                 677.999
+companies_cnpj           712.904
+companies_raw            839.409
+account_locations        711.109
+account_merge_candidates 126.403   ← fila de revisão humana
+rf_cnae_stats            178.869
+rf_municipio_stats       100.050
+```
+
+Origem: Dados Abertos CNPJ, release `2026-08`, 72.789.638 estabelecimentos lidos,
+839.409 no universo automotivo, 808.043 casados com o arquivo `Empresas`.
+
+**⚠ O quality gate de agrupamento não foi atingido: 82,2% contra os 85% que o
+frame 04 pede.** Não é falha — os dados estão lá —, mas 126 mil linhas aguardam
+decisão humana em `/merge-candidates`. Vale investigar se o limiar de 0,75 está
+adequado para nomes brasileiros antes de aceitar esse número como normal.
+
+O cache dos 6,7 GB está em `~/ah/.receita-cache` **dentro do WSL**, não no
+repositório.
+
+---
+
+## 3. Ambiente: rode tudo no WSL
+
+Não é preferência. São três fatos desta máquina:
+
+1. **O Smart App Control bloqueia DLL recém-compilado.** Depois de qualquer build,
+   o binário novo não tem reputação e o Windows recusa carregá-lo —
+   `An Application Control policy has blocked this file`. Matou o Ingestor e os
+   executáveis de teste.
+2. `scripts/hermes-setup.sh` depende de `chmod 600` de verdade; no Git Bash é
+   encenação.
+3. O instalador e o gateway do Hermes são bash + Python.
+
+```bash
+wsl -d Ubuntu-24.04
+export DOTNET_ROOT="$HOME/.dotnet"; export PATH="$DOTNET_ROOT:$PATH"   # já no .bashrc
+cd /mnt/d/projects/autohousCommercialAutomation
+```
+
+O Postgres continua no Docker Desktop e é alcançável do WSL em `localhost:5433`
+sem configuração extra.
+
+**Standby está desativado** para a carga longa não morrer. Reverta quando não
+precisar mais:
+
+```powershell
+powercfg /change standby-timeout-dc 60
+```
+
+**Nunca passe `--nologo` para `dotnet test`** — no modo MTP a flag faz o host
+localizar os módulos e não iniciar nenhum, reportando "Zero tests ran" com código
+5. Use `./scripts/test.sh`, que fixa a invocação correta.
+
+---
+
+## 4. O que foi entregue nesta sessão
+
+### 4.1 Website Auditor (A03) — completo
+
+Fatia vertical inteira, espelhando a forma do Researcher:
+
+```
+migration 0015   technologies (a P1 que nunca existiu), website_audit_evidence
+                 (paga a dívida do array evidence_ids), multiple_portals e
+                 complex_integration (que o OpportunityScoring JÁ LIA e o schema
+                 não tinha)
+domínio          WebsiteProbe, WebsiteAuditProfile, WebsiteAuditScoring,
+                 sobrecarga do EvidenceFirstGuard
+application      IWebsiteProbe, ExecuteWebsiteAuditUseCase, RequestWebsiteAuditUseCase
+agents           WebsiteAuditPromptBuilder + validador multi-schema
+WebAudit         projeto novo: HttpWebsiteProbe, TechnologySignatures
+infra            WebsiteAuditPersister
+api              POST /accounts/{id}/audit
+hermes/          schema, prompt versionado, skill
+```
+
+**A decisão de desenho que importa:** sonda **mede** (performance, SEO, mobile,
+tracking), agente **observa com evidência** (UX, conversão, estoque), plataforma
+**pontua**. Deixar o LLM chutar `performance_score` contradiz a regra central.
+
+A sonda HTTP não vê conteúdo renderizado por JavaScript — numa vitrine em SPA
+isso é o estoque inteiro. Por isso a contagem de veículos é pergunta para o
+**agente**, nunca para a sonda. Um headless browser entra depois atrás da mesma
+porta `IWebsiteProbe`, sem tocar no resto.
+
+### 4.2 Dois defeitos que teriam quebrado a ativação do Hermes
+
+Ambos **invisíveis sob fixture e fatais em produção** — é o preço de um runtime
+determinístico.
+
+**Transporte.** No Hermes v0.21.0, `GET /v1/runs/{id}` **não devolve o texto
+final**. Conferi na fonte instalada: nenhuma chamada a `_set_run_status` passa
+`output`, e o texto só existe no evento `assistant.completed` da SSE, numa fila
+sem histórico — quem faz polling chega tarde. O sintoma seria `RawText` vazio em
+100% dos runs, reprovado como `contract_violation`, cuja leitura óbvia é "o
+modelo não formata JSON". A investigação começaria pelo prompt.
+→ `HermesOptions.Transport` agora é `Chat` por padrão, e o caminho `/v1/runs`
+falha alto dizendo o remédio.
+
+**Fuso.** O Npgsql recusa `DateTimeOffset` com offset diferente de zero em
+`timestamptz`. Um agente pesquisando empresa brasileira devolve `observed_at` em
+`-03:00` com naturalidade, e isso atravessa schema, guard e desserialização sem
+um arranhão — falha só no `INSERT`. Os fixtures usavam `Z`.
+→ `Infrastructure/Timestamps.cs`, aplicado nos dois persisters e fixado por
+regressão nos dois fixtures.
+
+### 4.3 Três defeitos de escala na carga
+
+Mesma assinatura: **invisíveis na escala em que o código foi escrito, dominantes
+na escala em que ele roda.** Detalhe completo em
+[docs/carga-receita-otimizacao.md](docs/carga-receita-otimizacao.md).
+
+| Defeito | Medição | Correção |
+|---|---|---|
+| Limiar do `%` (0.30) divergindo do filtro (0.75) | 147 → 11,6 ms | `set_limit()` por conexão |
+| FK `raw_id` sem índice | `DELETE` de 839k rodou 10 min | migration `0016` |
+| **Cast implícito anulando índice** | **50,7 → 0,076 ms** | `cast(@Cnpj as char(14))` |
+
+O terceiro é o mais instrutivo: `companies_cnpj.cnpj` é `character(14)`, o Dapper
+manda `string`, o Npgsql tipa como `text`, e o Postgres reescreve para
+`(cnpj)::text = $1::text` — **o cast do lado da coluna, que nenhum índice serve**.
+Resultado: 96 → 31 ms por linha, ETA de 12 h para 3h44.
+
+**Onde mais isso pode estar:** todas as colunas `character` do schema —
+`companies_cnpj.uf`, `company_partners.cnpj_basico`,
+`account_merge_candidates.incoming_cnpj/uf`, `accounts.state`,
+`account_locations.state`. Corrigi as quatro comparações que existiam; consultas
+novas sobre essas colunas precisam do mesmo cuidado.
+
+### 4.4 Resiliência e retomada
+
+- `--resolve-batch <uuid>` no Ingestor: retoma um lote já capturado, pulando
+  download, leitura e captura. Foi o que salvou ~4 horas hoje.
+- Retry com espera crescente em `NpgsqlConnectionFactory.OpenAsync` (5×, 1s→8s).
+  A `/health` passa `retryTransient: false` — uma liveness probe que insiste 15 s
+  faria o Railway reiniciar um serviço que só esperava o banco.
+- `.gitattributes` com `eol=lf`: `core.autocrlf=true` deixava os `.sh` em CRLF, o
+  que mataria `deploy/hermes-entrypoint.sh` no container com `bash\r: No such
+  file` — erro que não menciona fim de linha em lugar nenhum.
+
+### 4.5 Railway
+
+`deploy/Dockerfile.{api,worker,hermes}`, `hermes-entrypoint.sh`, três
+`railway/*.json` e [docs/deploy-railway.md](docs/deploy-railway.md).
+
+**A regra que não pode ser afrouxada:** o `hermes-gateway` **não pode ter Public
+Networking**. O API Server expõe a superfície completa de ferramentas, incluindo
+execução de terminal. Sem domínio público a única rota é a rede privada; com ele,
+um Bearer seria a única coisa entre a internet e um shell.
+
+---
+
+## 5. O que está no meio do caminho
+
+**Orchestrator (A01), Product Matcher (A04), People Finder (A05)** apareceram na
+árvore durante esta sessão — não fui eu que os escrevi. O código compila e os 545
+testes passam, mas **eu não os revisei**. Antes de confiar neles:
+
+- a migration `0017_product_fit_and_contacts.sql` **não foi aplicada** ao banco de
+  dev (ele está em 16). Rode o Migrator.
+- confira se os novos repositórios sofrem do mesmo cast implícito da §4.3.
+
+---
+
+## 6. Próximos passos, em ordem
+
+1. **Aplicar a migration 0017** — o banco de dev está uma atrás.
+2. **`hermes setup --portal`** — interativo, a credencial é sua. Sem isso o
+   gateway sobe e todo run falha. Passo a passo em
+   [docs/hermes-runbook.md](docs/hermes-runbook.md).
+3. **`./scripts/hermes-setup.sh`** — `HERMES_API_SERVER_KEY` está vazia no `.env`
+   e o MCP nunca foi publicado.
+4. **Ensaiar com `AGENT_RUNTIME=fixture`** antes de gastar modelo. Se falhar em
+   fixture, o problema não é o Hermes.
+5. **Validar `docker build -f deploy/Dockerfile.hermes`** — nunca foi construído.
+   O layout de instalação veio do `install.sh`, não de um build real.
+6. **Olhar o quality gate de 82,2%** — 126 mil linhas em revisão é muito.
+
+---
+
+## 7. Decisões que tomamos e não devem ser refeitas sem motivo
+
+- **Índice composto por UF no trigrama: rejeitado.** Parece a otimização óbvia e
+  não é. O corte real é ~3,8x (SP concentra 26,6% das contas), e custa **29,3% da
+  fila de revisão** — nome parecido em UF diferente não é descartado, vira
+  `name_match_other_uf` e vai para humano. É decisão de produto, não otimização.
+- **Lote de transações na resolução: rejeitado sem medição.** O caso de uso
+  escolheu uma transação por linha de propósito; o teto de ganho é baixo.
+- **`Max Auto Prepare`: pendente, marginal.** Planejar custa 1,66 ms contra 1,13
+  de execução. Valeria ~10–15% hoje, mas exige reinício.

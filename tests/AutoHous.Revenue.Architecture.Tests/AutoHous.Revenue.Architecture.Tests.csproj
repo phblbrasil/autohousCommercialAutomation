@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\src\AutoHous.Revenue.Ingestor\AutoHous.Revenue.Ingestor.csproj" />
     <ProjectReference Include="..\..\src\AutoHous.Revenue.Mcp\AutoHous.Revenue.Mcp.csproj" />
     <ProjectReference Include="..\..\src\AutoHous.Revenue.ReceitaFederal\AutoHous.Revenue.ReceitaFederal.csproj" />
+    <ProjectReference Include="..\..\src\AutoHous.Revenue.WebAudit\AutoHous.Revenue.WebAudit.csproj" />
     <ProjectReference Include="..\..\src\AutoHous.Revenue.Worker\AutoHous.Revenue.Worker.csproj" />
   </ItemGroup>
 

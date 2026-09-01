@@ -124,6 +124,36 @@ public static class RevenueEndpoints
             };
         });
 
+        // ---------------------------------------------- POST /accounts/{id}/audit
+
+        // Auditoria de site (A03). Sem ?force: diferente da pesquisa, auditoria
+        // nao tem cooldown mensal - o site muda quando a empresa faz replatform,
+        // e represar a auditoria esconderia justamente o sinal de compra que ela
+        // existe para pegar. Ver RequestWebsiteAuditUseCase.
+        app.MapPost("/accounts/{id:guid}/audit", async (
+            Guid id, AuditRequest? body, RequestWebsiteAuditUseCase useCase, CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(id, body?.Url, ct);
+
+            return result.Outcome switch
+            {
+                RequestAuditOutcome.Accepted =>
+                    Results.Accepted(
+                        $"/research-runs/{result.ResearchRunId}",
+                        new { research_run_id = result.ResearchRunId, status = "queued" }),
+
+                RequestAuditOutcome.AccountNotFound => Results.NotFound(),
+
+                RequestAuditOutcome.AccountSuppressed =>
+                    Conflict("Conta suprimida", result.Detail),
+
+                RequestAuditOutcome.MissingDomain =>
+                    Conflict("Conta sem dominio", result.Detail),
+
+                _ => Results.Problem(statusCode: StatusCodes.Status500InternalServerError)
+            };
+        });
+
         // Candidatos a merge de grupo economico (§11). Ordena por similaridade de
         // trigrama; a decisao de merge continua sendo humana ou deterministica.
         app.MapGet("/accounts/{id:guid}/similar", async (
@@ -276,3 +306,10 @@ public sealed record IngestBatchRequest(
     IReadOnlyList<RawCompanyRow> Rows);
 
 public sealed record MergeDecisionRequest(bool Approve, string? DecidedBy = null);
+
+/// <summary>
+/// Corpo opcional de POST /accounts/{id}/audit. A url existe para auditar uma
+/// vitrine em subdominio proprio - comum no setor, onde institucional e estoque
+/// as vezes moram separados. Ausente, sai de accounts.domain.
+/// </summary>
+public sealed record AuditRequest(string? Url);

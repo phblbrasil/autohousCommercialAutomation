@@ -101,6 +101,23 @@ internal sealed record ReceitaCommandOptions
     public string? CacheDir { get; init; }
     public string? WorkDir { get; init; }
 
+    /// <summary>
+    /// Retoma a resolucao do account graph de um lote JA CAPTURADO, pulando
+    /// download, leitura e captura.
+    ///
+    /// Existe porque a carga nacional e longa e o que a interrompe raramente e
+    /// o dado: na primeira execucao completa foi a maquina entrar em Modern
+    /// Standby, matando as conexoes do pool. As linhas ficam em companies_raw
+    /// com status 'pending' e o batch_id preservado - ou seja, o trabalho para
+    /// retomar ja esta no banco, e so faltava um jeito de chamar
+    /// ResolveAccountGraphUseCase sobre ele.
+    ///
+    /// Sem isto, a unica saida e reexecutar a carga inteira: 45 min relendo 72
+    /// milhoes de estabelecimentos e um lote NOVO, que reinsere as mesmas linhas
+    /// cruas em vez de aproveitar as existentes.
+    /// </summary>
+    public Guid? ResolveBatch { get; init; }
+
     public static ReceitaCommandOptions? Parse(string[] args)
     {
         string? release = null, cacheDir = null, workDir = null;
@@ -108,6 +125,7 @@ internal sealed record ReceitaCommandOptions
         long? limit = null;
         bool list = false, statsOnly = false, dryRun = false;
         bool socios = false, inativos = false, secundario = false, keepSpool = false, offline = false;
+        Guid? resolveBatch = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -168,6 +186,11 @@ internal sealed record ReceitaCommandOptions
                     offline = true;
                     break;
 
+                case "--resolve-batch" when i + 1 < args.Length:
+                    if (!Guid.TryParse(args[++i], out var batch)) return null;
+                    resolveBatch = batch;
+                    break;
+
                 default:
                     if (!args[i].StartsWith('-') && release is null) release = args[i];
                     break;
@@ -180,6 +203,16 @@ internal sealed record ReceitaCommandOptions
         if (limit is not null && !dryRun) return null;
 
         if (release is not null && !IsRelease(release)) return null;
+
+        // Retomada e um modo proprio: ela nao le a origem, nao toca no cache e
+        // nao aceita recorte. Combinar com as flags de leitura daria a impressao
+        // de que elas teriam efeito - e nao teriam, porque a leitura ja aconteceu.
+        if (resolveBatch is not null &&
+            (list || statsOnly || dryRun || offline || limit is not null ||
+             ufs is not null || socios || release is not null))
+        {
+            return null;
+        }
 
         // Sem consultar a origem nao existe "a competencia mais recente": em
         // modo offline o release tem de ser dito.
@@ -197,6 +230,7 @@ internal sealed record ReceitaCommandOptions
             IncludeSecondaryCnae = secundario,
             KeepSpool = keepSpool,
             Offline = offline,
+            ResolveBatch = resolveBatch,
             Ufs = ufs,
             CacheDir = cacheDir,
             WorkDir = workDir

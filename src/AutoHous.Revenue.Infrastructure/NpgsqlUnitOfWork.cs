@@ -10,8 +10,67 @@ namespace AutoHous.Revenue.Infrastructure;
 /// </summary>
 public sealed class NpgsqlConnectionFactory(NpgsqlDataSource dataSource)
 {
-    public Task<NpgsqlConnection> OpenAsync(CancellationToken ct = default) =>
-        dataSource.OpenConnectionAsync(ct).AsTask();
+    /// <summary>
+    /// Tentativas ao abrir conexao, com espera crescente entre elas.
+    ///
+    /// Nao e hardening especulativo. A primeira carga nacional completa morreu
+    /// exatamente aqui, depois de quase 12 horas e 47% do lote:
+    ///
+    ///     Npgsql.NpgsqlException: The operation has timed out
+    ///       at NpgsqlConnector.ConnectAsync -> RawOpen -> OpenNewConnector
+    ///       at ResolveAccountGraphUseCase.CreateAsync
+    ///
+    /// A causa foi ambiental e esta no log de eventos do Windows: a maquina
+    /// entrou em Modern Standby a noite inteira, e o processo morreu DOIS
+    /// SEGUNDOS depois de ela acordar - as conexoes do pool tinham morrido junto
+    /// e a primeira reconexao estourou o timeout.
+    ///
+    /// O defeito real nao foi o soluco: foi um job de horas nao sobreviver a UM
+    /// soluco. Suspensao, reinicio de container e blip de rede sao normais em
+    /// maquina de desenvolvimento, e serao normais tambem no Railway, onde um
+    /// deploy do Postgres derruba conexao por alguns segundos.
+    /// </summary>
+    private const int MaxAttempts = 5;
+
+    /// <param name="retryTransient">
+    /// Falso para quem precisa de resposta rapida sobre o estado do banco. A
+    /// sonda de <c>/health</c> e o caso: insistir por 15 segundos faria uma
+    /// liveness probe expirar e o orquestrador reiniciar um servico que estava
+    /// apenas esperando o banco voltar - transformando um soluco de conexao num
+    /// ciclo de restart.
+    /// </param>
+    public async Task<NpgsqlConnection> OpenAsync(
+        CancellationToken ct = default, bool retryTransient = true)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await dataSource.OpenConnectionAsync(ct);
+            }
+            catch (Exception ex) when (retryTransient && attempt < MaxAttempts
+                                       && IsTransient(ex) && !ct.IsCancellationRequested)
+            {
+                // 1s, 2s, 4s, 8s. O teto de ~15s cobre com folga o tempo que o
+                // Docker Desktop leva para reprojetar a porta depois de a
+                // maquina acordar, que foi o caso observado.
+                await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)), ct);
+            }
+        }
+    }
+
+    /// <summary>
+    /// O Npgsql ja classifica o que e transitorio em <c>IsTransient</c> - timeout,
+    /// falha de rede, servidor em recuperacao. Confiar nessa classificacao em vez
+    /// de listar codigos evita que a lista envelheca; o TimeoutException entra
+    /// separado porque chega como inner de uma NpgsqlException so as vezes.
+    /// </summary>
+    private static bool IsTransient(Exception ex) => ex switch
+    {
+        NpgsqlException npgsql => npgsql.IsTransient,
+        TimeoutException => true,
+        _ => false
+    };
 }
 
 public sealed class NpgsqlUnitOfWorkFactory(NpgsqlConnectionFactory connections) : IUnitOfWorkFactory
@@ -105,13 +164,13 @@ public sealed class PostgresHealthProbe(NpgsqlConnectionFactory connections) : I
     {
         try
         {
-            await using var connection = await connections.OpenAsync(ct);
+            await using var connection = await connections.OpenAsync(ct, retryTransient: false);
             await using var command = connection.CreateCommand();
             command.CommandText = "select 1";
             await command.ExecuteScalarAsync(ct);
             return true;
         }
-        catch (NpgsqlException)
+        catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
         {
             return false;
         }

@@ -48,13 +48,27 @@ public class ResearchSliceTests : IAsyncLifetime
         var tables = await TestData.ScalarAsync<long>(_postgres.ConnectionString,
             "select count(*) from pg_tables where schemaname = 'public'");
 
-        // 26 tabelas de dominio + schema_versions.
+        // 30 tabelas de dominio + schema_versions.
         //
         // As tres da 0012: ingestion_batches, companies_raw e
         // account_merge_candidates. As tres da 0013: receita_releases,
         // rf_cnae_stats e rf_municipio_stats. E company_partners, sozinha na
         // 0014 porque e a unica que guarda PII de pessoa fisica.
-        Assert.Equal(27, tables);
+        //
+        // As duas da 0015, com o Website Auditor: `technologies` - a tabela P1
+        // do frame 03 que nunca existiu - e `website_audit_evidence`, que
+        // substitui o array `website_audits.evidence_ids`, divida assumida na
+        // 0005 e paga agora que ha quem escreva nela.
+        //
+        // As duas da 0017, com o Product Matcher e o People Finder:
+        // product_fit_evidence e contact_evidence - as duas tabelas de ligacao
+        // que dao lastro ao argumento comercial e ao contato. A 0017 tambem cria
+        // a view v_account_progress, que nao entra nesta contagem por ser view.
+        //
+        // Contar tabelas parece frageis ate uma migration criar uma sem querer:
+        // este numero e o que faz uma tabela nova aparecer na revisao em vez de
+        // entrar de carona.
+        Assert.Equal(31, tables);
     }
 
     [Fact]

@@ -1,0 +1,56 @@
+# ---------------------------------------------------------------------------
+# Revenue API — o unico servico do projeto Railway com dominio publico.
+#
+# O migrator viaja na mesma imagem, e nao em servico proprio: o Railway roda
+# `deploy.preDeployCommand` no MESMO container, antes de trocar a versao no ar
+# (ver deploy/railway/api.json). Migration falhada aborta o deploy em vez de
+# publicar uma API que fala com um schema que nao existe.
+# ---------------------------------------------------------------------------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+# Manifestos antes do codigo: enquanto nenhum .csproj mudar, o restore fica em
+# cache e o build de uma alteracao de codigo nao volta ao NuGet.
+COPY global.json Directory.Build.props AutoHous.Revenue.slnx ./
+COPY src/AutoHous.Revenue.Domain/*.csproj             src/AutoHous.Revenue.Domain/
+COPY src/AutoHous.Revenue.Application/*.csproj        src/AutoHous.Revenue.Application/
+COPY src/AutoHous.Revenue.Infrastructure/*.csproj     src/AutoHous.Revenue.Infrastructure/
+COPY src/AutoHous.Revenue.Api/*.csproj                src/AutoHous.Revenue.Api/
+COPY src/AutoHous.Revenue.Migrator/*.csproj           src/AutoHous.Revenue.Migrator/
+RUN dotnet restore src/AutoHous.Revenue.Api/AutoHous.Revenue.Api.csproj --nologo \
+ && dotnet restore src/AutoHous.Revenue.Migrator/AutoHous.Revenue.Migrator.csproj --nologo
+
+COPY src/ src/
+# O .csproj do migrator embarca database/migrations/*.sql como recurso: sem esta
+# copia ele publica sem nenhum script e reporta "0 script(s) aplicado(s)" com
+# sucesso, que e a falha mais cara possivel.
+COPY database/ database/
+
+RUN dotnet publish src/AutoHous.Revenue.Api/AutoHous.Revenue.Api.csproj \
+      -c Release -o /app/api --no-restore --nologo \
+ && dotnet publish src/AutoHous.Revenue.Migrator/AutoHous.Revenue.Migrator.csproj \
+      -c Release -o /app/migrator --no-restore --nologo
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+WORKDIR /app
+
+COPY --from=build /app/api      ./
+COPY --from=build /app/migrator ./migrator/
+
+# Sem usuario proprio a API roda como root; o Railway nao impoe isso, entao a
+# imagem impoe.
+RUN useradd --system --create-home --uid 10001 revenue
+USER revenue
+
+ENV DOTNET_EnableDiagnostics=0
+
+# O Railway injeta PORT em runtime, e ENV do Dockerfile nao interpola. Kestrel le
+# --urls, entao a expansao acontece no shell do entrypoint. O 8080 e so o
+# fallback para `docker run` local.
+#
+# [::] e nao 0.0.0.0: a rede privada do Railway e IPv6-only, e um socket ligado a
+# 0.0.0.0 nao atende nada vindo de *.railway.internal — o MCP dentro do container
+# do Hermes ficaria sem alcancar a API, com timeout e nao com recusa. O socket
+# dual-stack do Linux atende IPv4 pelo mesmo bind, entao o proxy publico continua
+# funcionando.
+ENTRYPOINT ["/bin/sh", "-c", "exec dotnet AutoHous.Revenue.Api.dll --urls http://[::]:${PORT:-8080}"]

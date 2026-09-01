@@ -17,6 +17,7 @@
     <ProjectReference Include="..\AutoHous.Revenue.Application\AutoHous.Revenue.Application.csproj" />
     <ProjectReference Include="..\AutoHous.Revenue.Infrastructure\AutoHous.Revenue.Infrastructure.csproj" />
     <ProjectReference Include="..\AutoHous.Revenue.Agents\AutoHous.Revenue.Agents.csproj" />
+    <ProjectReference Include="..\AutoHous.Revenue.WebAudit\AutoHous.Revenue.WebAudit.csproj" />
     <ProjectReference Include="..\AutoHous.Revenue.Domain\AutoHous.Revenue.Domain.csproj" />
   </ItemGroup>
 </Project>

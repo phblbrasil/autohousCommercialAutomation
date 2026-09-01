@@ -36,6 +36,32 @@ public sealed class AccountGraphRepository(
     {
         await using var connection = await connections.OpenAsync(ct);
 
+        // Alinha o limiar do OPERADOR `%` com o limiar que a consulta cobra logo
+        // abaixo. Sem isto, os dois discordam e o indice trabalha a toa.
+        //
+        // O `%` do pg_trgm nao usa o valor do `similarity() >= @MinSimilarity`:
+        // ele usa a GUC pg_trgm.similarity_threshold, cujo padrao e 0.30. Com
+        // 120 mil contas na tabela e um limiar real de 0.75, o indice devolvia
+        // 19.253 candidatos, o recheck descartava 17.875 e o filtro derrubava
+        // outros 979 - sobravam 399. Medido: 147 ms por chamada, 3.893 blocos de
+        // heap lidos. Alinhando os dois, a mesma consulta faz 11,6 ms e le 51
+        // blocos, com resultado IDENTICO: o filtro explicito continua sendo a
+        // autoridade, e o operador deixa de arrastar o que ele vai descartar.
+        //
+        // O defeito e da familia daquele que a camada 01 corrigiu com o indice
+        // sobre left(cnpj, 8): irrelevante com dezenas de contas, dominante com
+        // centenas de milhares - e pior a cada linha, porque o conjunto de
+        // trigramas cresce junto com a tabela.
+        //
+        // Por conexao, e nao `alter database`: a GUC muda a semantica do `%` para
+        // TODA consulta do banco, e um consumidor futuro que quisesse um limiar
+        // mais frouxo passaria a receber menos linhas sem nenhum aviso. Aqui o
+        // valor vem do mesmo parametro que a clausula usa, entao os dois nao tem
+        // como divergir.
+        await connection.ExecuteScalarAsync<float>(new CommandDefinition(
+            "select set_limit(@MinSimilarity)",
+            new { MinSimilarity = (float)minimumSimilarity }, cancellationToken: ct));
+
         var rows = await connection.QueryAsync<CandidateRow>(new CommandDefinition($"""
             with por_raiz as (
                 select distinct {CandidateColumns},
@@ -271,8 +297,27 @@ public sealed class AccountGraphRepository(
     {
         await using var connection = await connections.OpenAsync(ct);
 
+        // `cast(@Cnpj as char(14))` nao e decoracao: sem ele esta consulta faz SEQ
+        // SCAN, e ela roda uma vez por linha da carga nacional.
+        //
+        // `companies_cnpj.cnpj` e character(14). O Dapper manda um string do C#, o
+        // Npgsql o tipa como `text`, e o Postgres reescreve a comparacao para
+        // `(cnpj)::text = $1::text` - o cast do LADO DA COLUNA, que nenhum indice
+        // sobre `cnpj` consegue servir. Medido com 355 mil linhas:
+        //
+        //     parametro text      Parallel Seq Scan   50,7 ms
+        //     parametro char(14)  Index Scan           0,86 ms
+        //     com este cast       Index Scan           0,076 ms
+        //
+        // E pior que lento: e um seq scan sobre uma tabela que ganha uma linha a
+        // cada linha processada, entao o custo cresce durante a propria carga. Foi
+        // a causa real da degradacao de 1.933 para 564 linhas/min - nao o trigrama,
+        // que era a suspeita obvia.
+        //
+        // O cast fica no SQL, e nao num DbString do Dapper, porque aqui ele e
+        // visivel para quem le a consulta e para quem roda EXPLAIN nela.
         return await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition(
-            "select account_id from companies_cnpj where cnpj = @Cnpj and account_id is not null",
+            "select account_id from companies_cnpj where cnpj = cast(@Cnpj as char(14)) and account_id is not null",
             new { Cnpj = cnpj }, cancellationToken: ct));
     }
 

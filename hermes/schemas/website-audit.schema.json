@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autohous.com.br/schemas/website-audit.v1.json",
+  "title": "Website Audit",
+  "description": "Saida do agente Website Auditor (A03). NAO contem nota de desempenho, peso de pagina, tempo de resposta nem presenca de pixel: essas sao medicoes da plataforma, e pedi-las ao modelo convidaria uma estimativa a ocupar o lugar de um fato.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "audited_url", "audit_completeness", "evidence"],
+
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 1500,
+      "description": "O que este site e, para uma operacao automotiva."
+    },
+
+    "audited_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "A URL efetivamente analisada."
+    },
+
+    "audit_completeness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Autoavaliacao de quanto do site voce conseguiu cobrir. Abaixo de 0.5 a plataforma trata as areas sem achado como NAO OBSERVADAS em vez de boas."
+    },
+
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 60,
+      "description": "Lastro de tudo que voce afirma. Os demais campos apontam para esta lista por indice.",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+
+    "inventory": { "$ref": "#/$defs/inventory" },
+
+    "portals": {
+      "type": "array",
+      "maxItems": 20,
+      "description": "Onde mais o estoque desta empresa aparece, alem do site proprio.",
+      "items": { "$ref": "#/$defs/portal" }
+    },
+
+    "integrations": {
+      "type": "array",
+      "maxItems": 30,
+      "items": { "$ref": "#/$defs/integration" }
+    },
+
+    "conversion": { "$ref": "#/$defs/conversion" },
+
+    "issues": {
+      "type": "array",
+      "maxItems": 40,
+      "items": { "$ref": "#/$defs/issue" }
+    },
+
+    "strengths": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/strength" }
+    }
+  },
+
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_type", "claim_text", "confidence", "source"],
+      "properties": {
+        "claim_type": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60,
+          "description": "Rotulo do tipo de afirmacao. Use algo com 'inventory' ou 'estoque' no nome ao sustentar approximate_count - a plataforma checa isso."
+        },
+        "claim_text": { "type": "string", "minLength": 3, "maxLength": 1000 },
+        "extracted_value": {},
+        "confidence": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "source": { "$ref": "#/$defs/source" }
+      }
+    },
+
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "url", "observed_at"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["company_registry", "website", "search", "social", "news", "job_posting", "marketplace", "manual", "other"]
+        },
+        "url": { "type": "string", "format": "uri" },
+        "title": { "type": ["string", "null"], "maxLength": 300 },
+        "observed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["published_online", "evidence_index"],
+      "properties": {
+        "published_online": {
+          "type": "boolean",
+          "description": "Existe vitrine de veiculos no proprio site."
+        },
+        "approximate_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "SOMENTE com contagem ou paginacao visivel. Nunca estime pelo tamanho da empresa: este numero vai direto para a mensagem comercial."
+        },
+        "has_search_filters": { "type": ["boolean", "null"] },
+        "has_detail_pages": { "type": ["boolean", "null"] },
+        "has_photos": { "type": ["boolean", "null"] },
+        "evidence_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "portal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "evidence_index"],
+      "properties": {
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "url": { "type": ["string", "null"], "format": "uri" },
+        "evidence_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "integration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "category", "confidence", "evidence_index"],
+      "properties": {
+        "system": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "category": {
+          "type": "string",
+          "enum": ["analytics", "tag_manager", "ads", "crm", "dms", "chat", "cms", "inventory_platform", "marketplace", "ecommerce", "other"]
+        },
+        "confidence": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "evidence_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "conversion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_index"],
+      "properties": {
+        "has_lead_form": { "type": ["boolean", "null"] },
+        "has_whatsapp": { "type": ["boolean", "null"] },
+        "has_financing_simulator": { "type": ["boolean", "null"] },
+        "has_trade_in": { "type": ["boolean", "null"] },
+        "has_scheduling": { "type": ["boolean", "null"] },
+        "evidence_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["area", "severity", "title", "evidence_index"],
+      "properties": {
+        "area": {
+          "type": "string",
+          "enum": ["ux", "conversion", "inventory", "seo", "performance", "mobile", "tracking"]
+        },
+        "severity": { "type": "string", "enum": ["low", "medium", "high"] },
+        "title": { "type": "string", "minLength": 5, "maxLength": 200 },
+        "description": { "type": ["string", "null"], "maxLength": 1000 },
+        "evidence_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "strength": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["area", "title", "evidence_index"],
+      "properties": {
+        "area": {
+          "type": "string",
+          "enum": ["ux", "conversion", "inventory", "seo", "performance", "mobile", "tracking"]
+        },
+        "title": { "type": "string", "minLength": 5, "maxLength": 200 },
+        "evidence_index": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

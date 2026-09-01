@@ -48,7 +48,7 @@ public class OutboxConcurrencyTests : IAsyncLifetime
                 PayloadJson = JsonSerializer.Serialize(new { index = i }),
                 IdempotencyKey = $"test:{i}",
                 Status = OutboxStatus.Pending,
-                AvailableAt = DateTimeOffset.UtcNow
+                AvailableAt = TestData.AvailableNow
             });
 
             await uow.CommitAsync();
@@ -108,7 +108,7 @@ public class OutboxConcurrencyTests : IAsyncLifetime
             PayloadJson = "{}",
             IdempotencyKey = "chave-repetida",
             Status = OutboxStatus.Pending,
-            AvailableAt = DateTimeOffset.UtcNow
+            AvailableAt = TestData.AvailableNow
         };
 
         await using (var uow = await factory.BeginAsync())

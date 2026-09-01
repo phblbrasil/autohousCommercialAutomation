@@ -78,7 +78,11 @@ fi
 # ninguem precisar copiar valor entre dois arquivos.
 REVENUE_KEY=""
 if [ -f "$REPO/.env" ]; then
-  REVENUE_KEY="$(grep -m1 '^REVENUE_API_KEY=' "$REPO/.env" 2>/dev/null | cut -d= -f2- || true)"
+  # O `tr -d` nao e zelo: o .env e editado no Windows e e gitignored, entao o
+  # `* text=auto` do .gitattributes nunca o alcanca. Um \r que sobrevivesse
+  # ate aqui entraria no arquivo de segredo, o MCP mandaria `Bearer <chave>\r`,
+  # e o Kestrel devolveria 400 sem corpo - sem nunca chegar na autenticacao.
+  REVENUE_KEY="$(grep -m1 '^REVENUE_API_KEY=' "$REPO/.env" 2>/dev/null | cut -d= -f2- | tr -d '\r\n\t "'"'"'' || true)"
 fi
 
 # 24 e o piso que RevenueApiKeys impoe; 48 hex passa longe dele.

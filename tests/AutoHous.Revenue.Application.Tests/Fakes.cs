@@ -68,7 +68,10 @@ public sealed class FakeAccountRepository : IAccountRepository
     public Dictionary<Guid, Account> Accounts { get; } = [];
     public List<(Guid Id, AccountStatus From, AccountStatus To)> Transitions { get; } = [];
 
-    public Account Add(AccountStatus status = AccountStatus.Discovered, string? segment = null)
+    public Account Add(
+        AccountStatus status = AccountStatus.Discovered,
+        string? segment = null,
+        string? domain = null)
     {
         var account = new Account
         {
@@ -76,7 +79,8 @@ public sealed class FakeAccountRepository : IAccountRepository
             Name = "Grupo Vento Sul",
             NormalizedName = "GRUPO VENTO SUL",
             Status = status,
-            Segment = segment
+            Segment = segment,
+            Domain = domain
         };
 
         Accounts[account.Id] = account;
@@ -123,7 +127,15 @@ public sealed class FakeAccountRepository : IAccountRepository
 
     public Task<AccountContext?> GetContextAsync(Guid id, CancellationToken ct = default) =>
         Task.FromResult(Accounts.TryGetValue(id, out var a)
-            ? new AccountContext { AccountId = a.Id, Name = a.Name, Status = a.Status.ToDbValue() }
+            ? new AccountContext
+            {
+                AccountId = a.Id,
+                Name = a.Name,
+                Status = a.Status.ToDbValue(),
+                // O auditor deriva a URL daqui quando o evento nao traz uma.
+                Domain = a.Domain,
+                Segment = a.Segment
+            }
             : null);
 }
 
@@ -332,4 +344,40 @@ public sealed class FakeAccountGraphRepository : IAccountGraphRepository
         Decisions.Add((candidateId, approved));
         return Task.CompletedTask;
     }
+}
+
+/// <summary>
+/// Guarda os agent_runs em memoria, separando os que entraram DENTRO da transacao
+/// dos que entraram fora dela.
+///
+/// A separacao nao e detalhe do fake: um run que falhou grava fora de qualquer
+/// transacao de negocio de proposito - o custo do modelo ja foi incorrido e o
+/// motivo precisa sobreviver ao rollback. Um fake que juntasse os dois esconderia
+/// exatamente a propriedade que importa.
+/// </summary>
+public sealed class FakeAgentRunRepository : IAgentRunRepository
+{
+    public List<AgentRun> InTransaction { get; } = [];
+    public List<AgentRun> OutsideTransaction { get; } = [];
+
+    public Task InsertAsync(IUnitOfWork uow, AgentRun run, CancellationToken ct = default)
+    {
+        InTransaction.Add(run);
+        return Task.CompletedTask;
+    }
+
+    public Task InsertOutsideTransactionAsync(AgentRun run, CancellationToken ct = default)
+    {
+        OutsideTransaction.Add(run);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<AgentRun>> ListAsync(Guid? accountId, int limit, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<AgentRun>>(
+            [.. InTransaction.Concat(OutsideTransaction)]);
+
+    public Task<decimal> TotalCostForAccountAsync(Guid accountId, CancellationToken ct = default) =>
+        Task.FromResult(InTransaction.Concat(OutsideTransaction)
+            .Where(r => r.AccountId == accountId)
+            .Sum(r => r.EstimatedCost ?? 0m));
 }

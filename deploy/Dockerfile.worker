@@ -1,0 +1,53 @@
+# ---------------------------------------------------------------------------
+# Revenue Worker — dispatcher do outbox. Sem dominio publico: ele nao escuta
+# nada, so drena a fila.
+#
+# Diferente da API, esta imagem carrega ARQUIVOS alem dos binarios. O worker
+# resolve prompt, schema e fixtures a partir de REPOSITORY_ROOT (ver
+# WorkerServiceRegistration): sao os contratos versionados de hermes/, e a
+# ausencia deles nao aparece no build — aparece no primeiro run de pesquisa,
+# como FileNotFoundException.
+# ---------------------------------------------------------------------------
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY global.json Directory.Build.props AutoHous.Revenue.slnx ./
+COPY src/AutoHous.Revenue.Domain/*.csproj         src/AutoHous.Revenue.Domain/
+COPY src/AutoHous.Revenue.Application/*.csproj    src/AutoHous.Revenue.Application/
+COPY src/AutoHous.Revenue.Infrastructure/*.csproj src/AutoHous.Revenue.Infrastructure/
+COPY src/AutoHous.Revenue.Agents/*.csproj         src/AutoHous.Revenue.Agents/
+COPY src/AutoHous.Revenue.Worker/*.csproj         src/AutoHous.Revenue.Worker/
+RUN dotnet restore src/AutoHous.Revenue.Worker/AutoHous.Revenue.Worker.csproj --nologo
+
+COPY src/ src/
+RUN dotnet publish src/AutoHous.Revenue.Worker/AutoHous.Revenue.Worker.csproj \
+      -c Release -o /app --no-restore --nologo
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+WORKDIR /app
+
+COPY --from=build /app ./
+
+# Os contratos versionados, na arvore que REPOSITORY_ROOT espera encontrar.
+# Copiados do contexto e nao do estagio de build: sao dados, nao artefatos de
+# compilacao, e assim uma correcao de prompt nao exige recompilar o worker.
+COPY hermes/prompts/  /contracts/hermes/prompts/
+COPY hermes/schemas/  /contracts/hermes/schemas/
+COPY hermes/skills/   /contracts/hermes/skills/
+
+# Os fixtures viajam de proposito. AGENT_RUNTIME=fixture e o modo de subir o
+# worker em HML sem gastar um centavo de modelo — e sem eles esse modo falha na
+# primeira pesquisa em vez de na configuracao.
+COPY tests/fixtures/agent-runs/ /contracts/tests/fixtures/agent-runs/
+
+RUN useradd --system --create-home --uid 10001 revenue
+USER revenue
+
+# FindRepositoryRoot procura hermes/schemas subindo a arvore a partir do binario;
+# em /app ele nao acharia nada. O proprio Program.cs manda definir isto em
+# container.
+ENV REPOSITORY_ROOT=/contracts
+ENV AGENT_FIXTURE_DIR=/contracts/tests/fixtures/agent-runs
+ENV DOTNET_EnableDiagnostics=0
+
+ENTRYPOINT ["dotnet", "AutoHous.Revenue.Worker.dll"]

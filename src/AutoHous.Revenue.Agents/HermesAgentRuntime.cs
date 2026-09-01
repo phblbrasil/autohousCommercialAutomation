@@ -19,11 +19,17 @@ namespace AutoHous.Revenue.Agents;
 /// X-Hermes-Session-Id recebe o research_run_id, de modo que um run seja
 /// rastreavel dos dois lados.
 ///
-/// AVISO: a documentacao publica do Hermes lista os endpoints de /v1/runs mas
-/// nao fixa o envelope exato das respostas. A extracao abaixo e deliberadamente
-/// tolerante e deve ser confirmada contra o servidor real na ativacao (E11);
-/// se divergir, HermesOptions.Transport = Chat usa o envelope OpenAI, que e
-/// especificado com exatidao.
+/// O aviso que estava aqui - "o envelope de /v1/runs precisa ser confirmado
+/// contra o servidor real" - foi resolvido, e a resposta foi negativa. No Hermes
+/// v0.21.0, <c>GET /v1/runs/{id}</c> NAO devolve o texto final: o status e o
+/// dicionario de <c>_run_statuses</c>, e nenhuma chamada a <c>_set_run_status</c>
+/// passa <c>output</c>. O texto vive apenas no evento <c>assistant.completed</c>
+/// da SSE, sobre uma fila sem historico.
+///
+/// Por isso o padrao passou a ser <see cref="HermesTransport.Chat"/>, e o caminho
+/// de /v1/runs abaixo falha explicitamente quando completa sem texto em vez de
+/// devolver sucesso vazio. A tolerancia da extracao permanece: ela cobre as
+/// variacoes de envelope entre versoes do gateway, que e o que ela sempre foi.
 /// </summary>
 public sealed class HermesAgentRuntime : IAgentRuntime
 {
@@ -137,7 +143,24 @@ public sealed class HermesAgentRuntime : IAgentRuntime
             if (status is "completed" or "succeeded" or "done")
             {
                 stopwatch.Stop();
-                return Build(body, runId, stopwatch.Elapsed);
+                var built = Build(body, runId, stopwatch.Elapsed);
+
+                // Run terminou bem e nao trouxe texto: no Hermes v0.21.0 isso e o
+                // caso NORMAL desta rota, nao uma anomalia - o status nunca
+                // carrega `output`, e o texto so passou pela SSE, que nao guarda
+                // historico. Devolver sucesso com RawText vazio faria o validador
+                // reprovar como contract_violation, e a investigacao comecaria
+                // pelo prompt em vez do transporte. Ver HermesOptions.Transport.
+                if (string.IsNullOrWhiteSpace(built.RawText))
+                {
+                    return AgentRunResult.Failure(
+                        $"Run {runId} completou sem texto no corpo de GET /v1/runs/{{id}}. " +
+                        "Este gateway nao expoe o texto final no status do run; " +
+                        "use HermesOptions.Transport = Chat.",
+                        runId);
+                }
+
+                return built;
             }
 
             if (status is "failed" or "error" or "cancelled" or "canceled")

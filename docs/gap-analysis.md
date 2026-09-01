@@ -151,11 +151,11 @@ D01, D02 e D03 como P0 da W1.
 | D01 | Schema Supabase core | ✅ migrations 0001–0011 | ✅ + `0012` |
 | D02 | Pipeline CNPJ/CNAE — 300 contas seed | ❌ inexistente | ✅ ver seções 4 e 6 |
 | D03 | Resolver grupo econômico + confidence + review queue | ❌ inexistente | ✅ ver seção 4 |
-| A01 | Hermes Orchestrator (event → next_action) | 🟡 `OutboxDispatcher` roteia, mas não decide | 🟡 inalterado |
+| A01 | Hermes Orchestrator (event → next_action) | 🟡 `OutboxDispatcher` roteia, mas não decide | ✅ fechado depois (ver seção 6) |
 | A02 | Researcher com evidence schema | ✅ entregue | ✅ |
-| A03 | Website Auditor | ❌ | ❌ fora do escopo desta noite |
-| A04 | Product Matcher + scoring | ❌ | 🟡 scoring determinístico entregue; matcher não |
-| A05 | People Finder | ❌ | ❌ |
+| A03 | Website Auditor | ❌ | ✅ entregue depois (ver seção 6) |
+| A04 | Product Matcher + scoring | ❌ | ✅ fechado depois (ver seção 6) |
+| A05 | People Finder | ❌ | ✅ fechado depois (ver seção 6) |
 | A06 | SDR draft agent | ❌ | ❌ |
 | R01 | Cadência + state machine | 🟡 state machine de account existe | 🟡 |
 | G01 | Suppression + cooldown | ✅ | ✅ |
@@ -266,21 +266,59 @@ linha do lote** sobre uma tabela que cresce durante a própria carga.
 
 ---
 
-## 6. O que continua faltando
+## 6. A camada de agentes, fechada — 31/08/2026
 
-Em ordem de dependência, não de preferência:
+A seção 6 desta análise listava sete pendências. Cinco fecharam em duas
+entregas; duas continuam abertas, e por um motivo que não é técnico.
 
-1. **Website Auditor (A03)** — precisa de headless browser. É a maior peça de
-   infraestrutura nova. `website_audits.evidence_ids uuid[]` vira tabela de
-   ligação quando ele existir.
-2. **Product Matcher (A04)** — o scoring desta entrega produz `Technology Pain`
-   a partir de sinais; o fit por produto (FrontCar/MotorHub/BoxTech) depende do
-   auditor.
-3. **People Finder (A05)** — `contacts` e `contact_channels` já existem; falta o
-   agente e a política de PII do frame 09.
-4. **SDR + approval flow (A06, G01 parcial)** — Regra 4 (`requires_human_approval`)
-   está documentada e não implementada, porque não há outbound.
-5. **Reply Analyst e CRM Agent** — dependem de outbound.
-6. **`technologies`** — tabela P1 ausente do schema.
-7. **Orchestrator de verdade (A01)** — decidir próximo passo por estado, em vez
-   de rotear por tipo de evento.
+### Fechado pela entrega do Website Auditor
+
+| # | Pendência | Como fechou |
+|---|---|---|
+| 1 | Website Auditor (A03) | sonda determinística + agente; `AutoHous.Revenue.WebAudit` |
+| 6 | `technologies` ausente | migration `0015`, com `source` distinguindo medição de inferência |
+
+A `0015` também trocou `website_audits.evidence_ids uuid[]` pela tabela de
+ligação que a `0005` havia registrado como dívida.
+
+### Fechado por esta entrega
+
+| # | Pendência | Como fechou |
+|---|---|---|
+| 2 | Product Matcher (A04) | `ProductFitScoring` (determinístico, ADR-0005) + agente que escreve o argumento |
+| 3 | People Finder (A05) | contrato com PII, `PersonaCatalog`, `ContactPolicy`, migration `0017` |
+| 7 | Orchestrator de verdade (A01) | `AccountOrchestration.Decide` no domínio + `DecideNextActionUseCase` |
+
+**Quatro dos seis agentes do §17 existem**, cada um com o conjunto completo:
+prompt versionado, JSON Schema, skill do Hermes, porta de runtime, validador com
+ciclo de reparo, guard de evidência, persistência transacional e cinco fixtures.
+
+Três notas sobre o que foi decidido pelo caminho:
+
+- **O Product Matcher inverte a ordem dos outros agentes.** A plataforma calcula
+  o fit primeiro; o agente recebe o diagnóstico pronto e escreve o argumento.
+  Duas consequências: ele não consegue escolher o produto errado, porque não
+  escolhe, e a aritmética sobrevive à falha dele — a fila continua priorizada,
+  falta só a frase. É o único dos quatro cuja falha não perde a etapa.
+- **O People Finder tem duas camadas de guarda em vez de uma.** Além da Regra 1,
+  vale o `ContactPolicy`: piso de confiança por contato e por canal, e a regra de
+  que **cada canal aponta para evidência diferente da do contato**. Sem ela, um
+  e-mail deduzido de `nome.sobrenome@` passa em qualquer schema, tem formato
+  válido e aponta para uma fonte real — a notícia que citava o nome.
+- **`EntryMinimumCoverage` não decide nada com os pesos de hoje.** Está
+  documentado no código e há teste que falha se um rebalanceamento o tornar
+  ativo. Um guard inativo que ninguém sabe estar inativo é pior que guard nenhum.
+
+### O que continua faltando
+
+1. **SDR + approval flow (A06, G01 parcial)** — Regra 4
+   (`requires_human_approval`) está documentada e não implementada.
+2. **Reply Analyst e CRM Agent** — dependem do mesmo pré-requisito.
+
+Os três dependem de **canal de saída** — e-mail ou WhatsApp —, que é a maior peça
+de infraestrutura nova desde o auditor, e de uma decisão de governança sobre
+aprovação humana que não é de engenharia. Até lá, `account.ready` fica pendente
+na fila com registro explícito de que a conta está pronta e não há quem a aborde.
+
+Uma pendência menor, registrada para não virar surpresa: **`account.created` não
+entra na cadeia automática**. Ver [architecture.md](architecture.md#a-cadeia-completa-depois-do-orchestrator).

@@ -23,11 +23,18 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<CreateAccountUseCase>();
         services.AddScoped<RequestAccountResearchUseCase>();
+        services.AddScoped<RequestWebsiteAuditUseCase>();
         services.AddScoped<IngestCompanyBatchUseCase>();
         services.AddScoped<IngestCompanyStreamUseCase>();
         services.AddScoped<ResolveAccountGraphUseCase>();
         services.AddScoped<DecideMergeCandidateUseCase>();
         services.AddScoped<ScoreAccountUseCase>();
+
+        // O Orchestrator entra aqui e nao no worker: ele nao chama agente
+        // nenhum, so le o retrato e enfileira o comando seguinte. A API
+        // consegue compo-lo, e ha valor nisso - "o que acontece com esta conta
+        // agora?" e uma pergunta de dashboard.
+        services.AddScoped<DecideNextActionUseCase>();
 
         return services;
     }

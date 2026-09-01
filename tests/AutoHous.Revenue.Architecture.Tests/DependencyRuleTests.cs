@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 
 namespace AutoHous.Revenue.Architecture.Tests;
 
@@ -16,18 +18,42 @@ namespace AutoHous.Revenue.Architecture.Tests;
 /// </summary>
 public class DependencyRuleTests
 {
-    private static Assembly Domain => typeof(Revenue.Domain.Account).Assembly;
-    private static Assembly Application => typeof(Revenue.Application.IAccountRepository).Assembly;
-    private static Assembly Infrastructure => typeof(Revenue.Infrastructure.AccountRepository).Assembly;
-    private static Assembly Agents => typeof(Revenue.Agents.HermesAgentRuntime).Assembly;
-    private static Assembly ReceitaFederal => typeof(ReceitaFederal.ReceitaFederalArchive).Assembly;
+    private const string Domain = "AutoHous.Revenue.Domain";
+    private const string Application = "AutoHous.Revenue.Application";
+    private const string Infrastructure = "AutoHous.Revenue.Infrastructure";
+    private const string Agents = "AutoHous.Revenue.Agents";
+    private const string ReceitaFederal = "AutoHous.Revenue.ReceitaFederal";
+    private const string WebAudit = "AutoHous.Revenue.WebAudit";
 
     /// <summary>Pacotes que caracterizam infraestrutura em qualquer forma.</summary>
     private static readonly string[] InfrastructurePackages =
         ["Npgsql", "Dapper", "Microsoft.AspNetCore", "Json.Schema", "JsonSchema.Net", "ModelContextProtocol", "dbup"];
 
-    private static string[] ReferencesOf(Assembly assembly) =>
-        [.. assembly.GetReferencedAssemblies().Select(a => a.Name ?? string.Empty)];
+    /// <summary>
+    /// Le as referencias direto dos metadados do arquivo, sem carregar o
+    /// assembly como codigo.
+    ///
+    /// A regra so precisa do que o compilador gravou; executar as camadas de
+    /// producao dentro do processo de teste seria efeito colateral gratuito. E
+    /// ha um ganho pratico: uma politica de Application Control - o Smart App
+    /// Control do Windows, por exemplo - pode bloquear o LOAD de um binario
+    /// recem-compilado, e a regra de arquitetura sumiria junto com ele. Ler
+    /// metadado nao passa pelo loader do runtime.
+    /// </summary>
+    private static string[] ReferencesOf(string assemblyName)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, $"{assemblyName}.dll");
+
+        Assert.True(File.Exists(path), $"Assembly ausente ao lado do teste: {path}");
+
+        using var file = File.OpenRead(path);
+        using var pe = new PEReader(file);
+
+        var metadata = pe.GetMetadataReader();
+
+        return [.. metadata.AssemblyReferences.Select(handle =>
+            metadata.GetString(metadata.GetAssemblyReference(handle).Name))];
+    }
 
     // -------------------------------------------------------------- dominio
 
@@ -89,7 +115,10 @@ public class DependencyRuleTests
     [Fact]
     public void Infraestrutura_nao_declara_portas_publicas()
     {
-        var offenders = Infrastructure.GetExportedTypes()
+        // Esta regra fala de TIPOS, e nao de referencias: aqui o assembly
+        // precisa mesmo estar carregado. O typeof ja o traz, sem Assembly.Load.
+        var offenders = typeof(Revenue.Infrastructure.AccountRepository).Assembly
+            .GetExportedTypes()
             .Where(t => t.IsInterface)
             .Select(t => t.FullName!)
             .ToList();
@@ -124,9 +153,7 @@ public class DependencyRuleTests
     [Fact]
     public void Api_nao_acessa_o_banco_diretamente()
     {
-        var api = Assembly.Load("AutoHous.Revenue.Api");
-
-        var offenders = ReferencesOf(api)
+        var offenders = ReferencesOf("AutoHous.Revenue.Api")
             .Where(name => name.StartsWith("Npgsql", StringComparison.OrdinalIgnoreCase)
                         || name.StartsWith("Dapper", StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -143,8 +170,7 @@ public class DependencyRuleTests
     [Fact]
     public void Mcp_nao_alcanca_o_banco()
     {
-        var mcp = Assembly.Load("AutoHous.Revenue.Mcp");
-        var references = ReferencesOf(mcp);
+        var references = ReferencesOf("AutoHous.Revenue.Mcp");
 
         Assert.DoesNotContain("Npgsql", references);
         Assert.DoesNotContain("Dapper", references);
@@ -191,5 +217,35 @@ public class DependencyRuleTests
     public void Aplicacao_nao_conhece_o_adaptador_da_receita()
     {
         Assert.DoesNotContain("AutoHous.Revenue.ReceitaFederal", ReferencesOf(Application));
+    }
+
+    /// <summary>
+    /// A sonda de site (A03) faz HTTP e le HTML — e nao pode alcancar o banco.
+    ///
+    /// A regra existe agora, com a sonda ainda sendo HTTP puro, porque e agora
+    /// que ela e barata de impor. Quando o headless browser entrar atras da
+    /// mesma porta, ele traz Playwright e umas centenas de MB de Chromium; se a
+    /// fronteira nao estiver posta antes, o caminho de menor resistencia sera
+    /// referenciar a Infrastructure "so para gravar o resultado direto" — e a
+    /// porta IWebsiteProbe deixa de ter proposito.
+    /// </summary>
+    [Fact]
+    public void Sonda_de_site_implementa_portas_sem_conhecer_persistencia()
+    {
+        var references = ReferencesOf(WebAudit);
+
+        Assert.Contains("AutoHous.Revenue.Application", references);
+        Assert.DoesNotContain("AutoHous.Revenue.Infrastructure", references);
+        Assert.DoesNotContain("Npgsql", references);
+        Assert.DoesNotContain("Dapper", references);
+    }
+
+    /// <summary>
+    /// A Application declara IWebsiteProbe e nao pode enxergar quem a implementa.
+    /// </summary>
+    [Fact]
+    public void Aplicacao_nao_conhece_a_sonda_de_site()
+    {
+        Assert.DoesNotContain("AutoHous.Revenue.WebAudit", ReferencesOf(Application));
     }
 }

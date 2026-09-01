@@ -1,0 +1,13 @@
+# O contexto de build sobe inteiro para o daemon; sem isto o .receita-cache
+# (7,3 GB por release) iria junto e o deploy no Railway estouraria o limite
+# antes de compilar a primeira linha.
+.git/
+.receita-cache/
+.receita-work/
+TestResults/
+**/bin/
+**/obj/
+.env
+.vs/
+.idea/
+*.user

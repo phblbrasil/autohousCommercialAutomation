@@ -93,7 +93,8 @@ public sealed class CompanyPartnerRepository(
                    representante_qualificacao as RepresentanteQualificacao,
                    faixa_etaria               as FaixaEtaria
               from company_partners
-             where cnpj_basico = @Cnpj
+             -- char(8) aqui, mesma armadilha do char(14) em companies_cnpj.
+             where cnpj_basico = cast(@Cnpj as char(8))
              order by nome
             """,
             new { Cnpj = cnpjBasico }, cancellationToken: ct));

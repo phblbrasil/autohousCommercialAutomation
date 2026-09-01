@@ -55,11 +55,13 @@ public sealed class AccountScoreRepository(NpgsqlConnectionFactory connections) 
                    (select count(*) from contacts c6
                      where c6.account_id = a.id
                        and c6.status = 'invalid'::contact_status)::int as InvalidContacts,
-                   w.performance_score as PerformanceScore,
-                   w.seo_score         as SeoScore
+                   w.performance_score    as PerformanceScore,
+                   w.seo_score            as SeoScore,
+                   w.multiple_portals     as MultiplePortals,
+                   w.complex_integration  as ComplexIntegration
               from accounts a
               left join lateral (
-                   select performance_score, seo_score
+                   select performance_score, seo_score, multiple_portals, complex_integration
                      from website_audits wa
                     where wa.account_id = a.id
                     order by wa.audited_at desc
@@ -95,12 +97,25 @@ public sealed class AccountScoreRepository(NpgsqlConnectionFactory connections) 
             // "nao observada" em vez de assumir que o site esta bom.
             // website_audits guarda numeric(5,2) na escala 0-100; o dominio
             // trabalha em 0-1. A conversao e do adaptador, nao do score.
+            // A condicao inclui os dois booleanos de proposito. Uma auditoria de
+            // site fora do ar nao produz nota nenhuma, mas ainda pode ter
+            // observado que a empresa publica em tres portais - e descartar isso
+            // por ausencia de nota jogaria fora o fato mais acionavel dela.
             Audit = row.PerformanceScore is null && row.SeoScore is null
+                    && row.MultiplePortals is null && row.ComplexIntegration is null
                 ? null
                 : new WebsiteAuditFacts
                 {
                     PerformanceScore = ToUnitScale(row.PerformanceScore),
-                    SeoScore = ToUnitScale(row.SeoScore)
+                    SeoScore = ToUnitScale(row.SeoScore),
+
+                    // Ate a migration 0015 estes dois nao tinham coluna: o
+                    // dominio os declarava em WebsiteAuditFacts, o
+                    // OpportunityScoring os lia, e o adaptador nao tinha de onde
+                    // trazer. Dois dos cinco criterios de Technology Pain
+                    // ficavam permanentemente "nao observados".
+                    MultiplePortals = row.MultiplePortals,
+                    ComplexIntegration = row.ComplexIntegration
                 },
 
             Contacts = new ContactabilityFacts
@@ -182,6 +197,8 @@ public sealed class AccountScoreRepository(NpgsqlConnectionFactory connections) 
         public int InvalidContacts { get; init; }
         public decimal? PerformanceScore { get; init; }
         public decimal? SeoScore { get; init; }
+        public bool? MultiplePortals { get; init; }
+        public bool? ComplexIntegration { get; init; }
     }
 
     /// <summary>

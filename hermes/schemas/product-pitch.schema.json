@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autohous.com.br/schemas/product-pitch.v1.json",
+  "title": "Product Pitch",
+  "description": "Saida do agente Product Matcher (A04). NAO contem nota de fit, ranking nem escolha de porta de entrada: isso e aritmetica deterministica da plataforma (ProductFitScoring, ADR-0005). O agente escreve o argumento e antecipa a objecao, sempre com evidencia.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "evidence", "pitches"],
+
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 1500,
+      "description": "Em uma passagem: qual e a dor central desta operacao e por que o produto de entrada e o que e."
+    },
+
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 60,
+      "description": "Lastro de tudo que voce afirma. Os demais campos apontam para esta lista por indice.",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+
+    "pitches": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "description": "Um por produto que a plataforma pediu. Nao acrescente produto que nao foi pedido: a nota dele nao foi calculada, e um argumento sem nota nao entra na fila.",
+      "items": { "$ref": "#/$defs/pitch" }
+    },
+
+    "disqualifiers": {
+      "type": "array",
+      "maxItems": 10,
+      "description": "Motivos para NAO abordar esta conta agora. Recuperacao judicial, encerramento, mudanca de ramo, ja ser cliente de um parceiro que nos revende.",
+      "items": { "$ref": "#/$defs/disqualifier" }
+    }
+  },
+
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_type", "claim_text", "confidence", "source"],
+      "properties": {
+        "claim_type": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "claim_text": { "type": "string", "minLength": 3, "maxLength": 1000 },
+        "extracted_value": {},
+        "confidence": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "source": { "$ref": "#/$defs/source" }
+      }
+    },
+
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "url", "observed_at"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["company_registry", "website", "search", "social", "news", "job_posting", "marketplace", "manual", "other"]
+        },
+        "url": { "type": "string", "format": "uri" },
+        "title": { "type": ["string", "null"], "maxLength": 300 },
+        "observed_at": { "type": "string", "format": "date-time" }
+      }
+    },
+
+    "pitch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["product", "angle", "reasons", "confidence"],
+      "properties": {
+        "product": {
+          "type": "string",
+          "enum": ["FrontCar", "MotorHub", "AutoFollow", "AutoTalk", "BoxTech"],
+          "description": "Nome exato do catalogo. 'Partner Program' nao entra aqui: e canal, e recomenda-lo a uma concessionaria seria oferecer que ela revenda a AutoHous."
+        },
+
+        "angle": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 400,
+          "description": "A frase de entrada, ancorada em um fato observado. E o unico campo que chega quase inalterado ao SDR. Nada de superlativo, nada de numero que nao esteja em evidence[]."
+        },
+
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "description": "Por que este produto para esta operacao. Cada motivo aponta para a evidencia que o sustenta.",
+          "items": { "$ref": "#/$defs/claim" }
+        },
+
+        "objections": {
+          "type": "array",
+          "maxItems": 6,
+          "items": { "$ref": "#/$defs/objection" }
+        },
+
+        "recommended_personas": {
+          "type": "array",
+          "maxItems": 6,
+          "description": "Subconjunto das personas que a plataforma listou para ESTE produto. Voce pode restringir; nao pode inventar cargo fora da lista - a plataforma rejeita o run.",
+          "items": { "type": "string", "minLength": 2, "maxLength": 60 }
+        },
+
+        "confidence": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "description": "Quanta confianca voce tem NO ARGUMENTO, e nao no produto. Argumento apoiado em evidencia fraca tem confianca baixa mesmo quando o fit calculado e alto."
+        }
+      }
+    },
+
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "evidence_index"],
+      "properties": {
+        "text": { "type": "string", "minLength": 10, "maxLength": 500 },
+        "evidence_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "objection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "response", "evidence_index"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 400,
+          "description": "O que o interlocutor provavelmente responde. 'Ja temos site novo', 'quem cuida disso e a agencia'."
+        },
+        "response": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 600,
+          "description": "Como responder sem prometer o que nao foi verificado."
+        },
+        "evidence_index": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "disqualifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "severity", "evidence_index"],
+      "properties": {
+        "reason": { "type": "string", "minLength": 10, "maxLength": 400 },
+        "severity": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "'high' tira a conta da fila quente e manda para revisao humana. Nunca suprime sozinho: suppression e decisao de gente."
+        },
+        "evidence_index": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

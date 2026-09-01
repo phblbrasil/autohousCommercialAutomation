@@ -139,11 +139,52 @@ contatada é normal — chegou um sinal novo —, mas empurrá-la de volta para
 
 Conta em `suppressed` não pontua: não há fila de execução para priorizar.
 
-## Limitação conhecida
+## A limitação conhecida, resolvida
 
-Hoje o score é honesto e incompleto. Sem o Website Auditor (A03) e sem o People
-Finder (A05), 45 dos 100 pontos são estruturalmente inalcançáveis, e nenhuma
-conta passa de `medium` só com pesquisa.
+A versão anterior deste documento registrava: *"sem o Website Auditor (A03) e sem
+o People Finder (A05), 45 dos 100 pontos são estruturalmente inalcançáveis, e
+nenhuma conta passa de `medium` só com pesquisa"*.
 
-Isso é a leitura correta do estado do sistema, não um defeito do score — e é
-exatamente o que a cobertura reporta.
+Os dois existem. Technology Pain lê as sete notas da auditoria, e Contactability
+lê os contatos que o People Finder grava — as 100 casas estão alcançáveis, e a
+cobertura passou a medir o que **de fato** não foi observado nesta conta, em vez
+de o que o sistema ainda não sabia observar.
+
+## O segundo motor determinístico: fit de produto
+
+O Opportunity Score responde *"quanta dor esta conta tem?"*. A partir do Product
+Matcher (A04) existe um segundo cálculo, com a mesma natureza e a mesma
+justificativa, respondendo *"dor de quê?"*:
+[`ProductFitScoring`](../src/AutoHous.Revenue.Domain/ProductFitScoring.cs).
+
+| | Opportunity Score | Product Fit |
+|---|---|---|
+| Pergunta | quanta dor? | dor de quê? |
+| Saída | um número, quatro dimensões | uma nota por produto, mais a porta de entrada |
+| Entrada de auditoria | quatro campos (`WebsiteAuditFacts`) | as sete notas (`WebsiteAuditDetail`) |
+| Onde vai | ordena a fila | escolhe o argumento |
+
+São dois recortes da mesma auditoria porque respondem a perguntas diferentes, e
+fundi-los faria o scoring geral carregar campos que ele nunca lê. A diferença
+entre uma vitrine ruim e um atendimento ausente não muda o Opportunity Score —
+muda qual produto oferecer.
+
+As duas notas somam por produto, e não distribuem: dois produtos podem pontuar
+alto ao mesmo tempo, e num grupo com dez lojas e site ruim isso é o retrato
+correto. O que é único é a **porta de entrada** — um SDR que abre a conversa com
+três produtos não abre conversa nenhuma.
+
+### Ausência de assinatura pesa menos que medição
+
+Uma regra que vale para os três critérios de ausência do fit
+(`captura_sem_destino`, `medicao`, `canal_de_conversa`): a sonda só enxerga
+assinatura que ela conhece. "Nenhum analytics detectado" pode ser um GA4 carregado
+por um gerenciador de tags fora do catálogo; "nenhum chat detectado" pode ser um
+botão de WhatsApp caseiro.
+
+Medição erra por ruído; ausência erra por ignorância, e a segunda merece menos
+ponto. O `canal_de_conversa` vai além e exige **corroboração** pela conversão
+medida — sem isso, AutoTalk venceria a porta de entrada em toda conta grande,
+independentemente de haver dor de atendimento.
+
+Ver [ADR-0010](adr/0010-plataforma-decide-agente-argumenta.md).

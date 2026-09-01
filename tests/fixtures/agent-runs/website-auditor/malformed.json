@@ -1,0 +1,193 @@
+Claro! Aqui esta a auditoria que voce pediu:
+
+```json
+{
+  "summary": "Site institucional com vitrine de seminovos própria, servida em subdomínio separado do institucional. A vitrine tem filtro por marca e faixa de preço, página de detalhe por veículo e fotos reais. O mesmo estoque também é publicado no Webmotors e no iCarros, com contagem divergente entre os três. Conversão concentrada em WhatsApp; não há simulador de financiamento nem avaliação de usado.",
+  "audited_url": "https://grupoventosul.com.br",
+  "audit_completeness": 0.82,
+  "evidence": [
+    {
+      "claim_type": "inventory_count",
+      "claim_text": "A vitrine exibe 'Página 1 de 32' com 12 veículos por página, totalizando aproximadamente 380 veículos.",
+      "extracted_value": {
+        "pages": 32,
+        "per_page": 12
+      },
+      "confidence": 0.85,
+      "source": {
+        "type": "website",
+        "url": "https://seminovos.grupoventosul.com.br/estoque",
+        "title": "Estoque de seminovos",
+        "observed_at": "2026-08-31T14:20:00-03:00"
+      }
+    },
+    {
+      "claim_type": "inventory_platform",
+      "claim_text": "A vitrine roda em subdomínio próprio, servida por plataforma distinta do site institucional.",
+      "confidence": 0.75,
+      "source": {
+        "type": "website",
+        "url": "https://seminovos.grupoventosul.com.br/estoque",
+        "observed_at": "2026-08-31T14:21:00-03:00"
+      }
+    },
+    {
+      "claim_type": "marketplace_listing",
+      "claim_text": "Perfil ativo no Webmotors com 341 veículos anunciados, contra ~380 no site próprio.",
+      "extracted_value": {
+        "count": 341
+      },
+      "confidence": 0.8,
+      "source": {
+        "type": "marketplace",
+        "url": "https://www.webmotors.com.br/loja/grupo-vento-sul",
+        "observed_at": "2026-08-31T14:28:00-03:00"
+      }
+    },
+    {
+      "claim_type": "marketplace_listing",
+      "claim_text": "Perfil no iCarros com 298 veículos anunciados.",
+      "extracted_value": {
+        "count": 298
+      },
+      "confidence": 0.7,
+      "source": {
+        "type": "marketplace",
+        "url": "https://www.icarros.com.br/lojas/grupo-vento-sul",
+        "observed_at": "2026-08-31T14:31:00-03:00"
+      }
+    },
+    {
+      "claim_type": "conversion_path",
+      "claim_text": "Botão flutuante de WhatsApp em todas as páginas; formulário de contato apenas na página institucional.",
+      "confidence": 0.9,
+      "source": {
+        "type": "website",
+        "url": "https://grupoventosul.com.br/contato",
+        "observed_at": "2026-08-31T14:24:00-03:00"
+      }
+    },
+    {
+      "claim_type": "crm_system",
+      "claim_text": "Vaga de 'Analista de CRM' publicada pelo grupo menciona operação diária em RD Station e Syonet.",
+      "confidence": 0.6,
+      "source": {
+        "type": "job_posting",
+        "url": "https://www.linkedin.com/jobs/view/analista-crm-grupo-vento-sul",
+        "observed_at": "2026-08-31T14:40:00-03:00"
+      }
+    },
+    {
+      "claim_type": "inventory_quality",
+      "claim_text": "Três veículos da primeira página aparecem com selo 'VENDIDO' mas continuam listados no filtro padrão.",
+      "confidence": 0.85,
+      "source": {
+        "type": "website",
+        "url": "https://seminovos.grupoventosul.com.br/estoque?pagina=1",
+        "observed_at": "2026-08-31T14:22:00-03:00"
+      }
+    },
+    {
+      "claim_type": "seo_structure",
+      "claim_text": "Cada veículo tem URL própria e legível, com marca, modelo e ano no caminho.",
+      "confidence": 0.9,
+      "source": {
+        "type": "website",
+        "url": "https://seminovos.grupoventosul.com.br/veiculo/toyota-corolla-2022",
+        "observed_at": "2026-08-31T14:26:00-03:00"
+      }
+    }
+  ],
+  "inventory": {
+    "published_online": true,
+    "approximate_count": 380,
+    "has_search_filters": true,
+    "has_detail_pages": true,
+    "has_photos": true,
+    "evidence_index": 0
+  },
+  "portals": [
+    {
+      "name": "Webmotors",
+      "url": "https://www.webmotors.com.br/loja/grupo-vento-sul",
+      "evidence_index": 2
+    },
+    {
+      "name": "iCarros",
+      "url": "https://www.icarros.com.br/lojas/grupo-vento-sul",
+      "evidence_index": 3
+    }
+  ],
+  "integrations": [
+    {
+      "system": "RD Station",
+      "category": "crm",
+      "confidence": 0.6,
+      "evidence_index": 5
+    },
+    {
+      "system": "Syonet",
+      "category": "dms",
+      "confidence": 0.6,
+      "evidence_index": 5
+    },
+    {
+      "system": "Plataforma de vitrine própria",
+      "category": "inventory_platform",
+      "confidence": 0.75,
+      "evidence_index": 1
+    }
+  ],
+  "conversion": {
+    "has_lead_form": true,
+    "has_whatsapp": true,
+    "has_financing_simulator": false,
+    "has_trade_in": false,
+    "has_scheduling": null,
+    "evidence_index": 4
+  },
+  "issues": [
+    {
+      "area": "inventory",
+      "severity": "high",
+      "title": "Veículos vendidos continuam listados no estoque",
+      "description": "Três veículos da primeira página exibem selo VENDIDO e permanecem no resultado padrão da busca, o que gera lead para carro que não existe mais.",
+      "evidence_index": 6
+    },
+    {
+      "area": "inventory",
+      "severity": "medium",
+      "title": "Contagem de estoque diverge entre site e portais",
+      "description": "~380 no site próprio, 341 no Webmotors, 298 no iCarros. Nenhuma das três fontes concorda.",
+      "evidence_index": 2
+    },
+    {
+      "area": "conversion",
+      "severity": "medium",
+      "title": "Sem simulador de financiamento",
+      "description": "A maior parte das vendas do segmento é financiada; sem simulação o lead sai do site para calcular.",
+      "evidence_index": 4
+    },
+    {
+      "area": "conversion",
+      "severity": "low",
+      "title": "Sem avaliação de usado para troca",
+      "evidence_index": 4
+    }
+  ],
+  "strengths": [
+    {
+      "area": "seo",
+      "title": "Página de detalhe por veículo com URL própria e legível",
+      "evidence_index": 7
+    },
+    {
+      "area": "inventory",
+      "title": "Vitrine com filtro por marca e faixa de preço e fotos reais",
+      "evidence_index": 0
+    }
+  ]
+,
+}
+```
+Espero ter ajudado.

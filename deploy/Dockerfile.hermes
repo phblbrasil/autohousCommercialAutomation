@@ -1,0 +1,77 @@
+# ---------------------------------------------------------------------------
+# Hermes gateway — o API Server que o Revenue Worker chama.
+#
+# LEIA ANTES DE PUBLICAR ESTE SERVICO:
+#
+# O API Server do Hermes expoe a superficie COMPLETA de ferramentas, inclusive
+# execucao de terminal. O HERMES.md resolve isso com "manter em 127.0.0.1"; num
+# container do Railway esse endereco nao existe como fronteira, porque o processo
+# ja esta sozinho no seu proprio namespace de rede. A fronteira equivalente aqui
+# e outra, e ela nao mora neste arquivo:
+#
+#     este servico NAO PODE ter Public Networking habilitado.
+#
+# Sem dominio publico, a unica rota ate a porta e a rede privada do projeto, onde
+# so os outros servicos alcancam. Com dominio publico, um Bearer de 48 hex passa
+# a ser a unica coisa entre a internet e um shell. Ver docs/deploy-railway.md.
+#
+# O layout de instalacao abaixo foi conferido no proprio install.sh (fev/2026):
+# instalacao como root usa FHS — codigo em /usr/local/lib/hermes-agent, comando
+# em /usr/local/bin/hermes.
+# ---------------------------------------------------------------------------
+
+# --- Estagio 1: o MCP, que roda como subprocesso stdio dentro deste container --
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS mcp-build
+WORKDIR /src
+
+COPY global.json Directory.Build.props ./
+COPY src/AutoHous.Revenue.Mcp/*.csproj src/AutoHous.Revenue.Mcp/
+RUN dotnet restore src/AutoHous.Revenue.Mcp/AutoHous.Revenue.Mcp.csproj --nologo
+
+COPY src/AutoHous.Revenue.Mcp/ src/AutoHous.Revenue.Mcp/
+# `dotnet publish` e nao `dotnet run`: o MCP fala o protocolo por stdout, e a
+# saida de build do `run` corromperia o handshake. O scripts/hermes-setup.sh diz
+# a mesma coisa para o caminho local.
+RUN dotnet publish src/AutoHous.Revenue.Mcp/AutoHous.Revenue.Mcp.csproj \
+      -c Release -o /app/mcp --no-restore --nologo
+
+# --- Estagio 2: o gateway ---------------------------------------------------
+# Base .NET e nao Python: o runtime do .NET e a dependencia dificil de instalar
+# depois (feed da Microsoft, ICU, versao casada com o publish acima), enquanto
+# Python e git saem do apt do Debian em uma linha.
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl git python3 python3-venv xz-utils \
+ && rm -rf /var/lib/apt/lists/*
+
+# O instalador resolve o layout FHS por rodar como root, e baixa Python 3.11 e
+# Node por conta propria via uv — o python3 do apt acima existe so para o
+# bootstrap do proprio uv.
+RUN curl -fsSL https://hermes-agent.nousresearch.com/install.sh \
+      -o /tmp/hermes-install.sh \
+ && bash /tmp/hermes-install.sh --skip-setup --non-interactive \
+ && rm -f /tmp/hermes-install.sh \
+ && test -x /usr/local/bin/hermes
+
+COPY --from=mcp-build /app/mcp /opt/autohous/revenue-mcp/
+
+# A skill versionada. Localmente o setup aponta skills.external_dirs para o
+# proprio repositorio, para que a copia nao envelheca; num container nao ha
+# repositorio, entao a imagem passa a ser a versao — e o deploy, o momento em que
+# ela e atualizada.
+COPY hermes/skills/ /opt/autohous/hermes/skills/
+
+COPY deploy/hermes-entrypoint.sh /usr/local/bin/hermes-entrypoint.sh
+RUN chmod +x /usr/local/bin/hermes-entrypoint.sh
+
+# Roda como root de proposito, e esta e a excecao consciente das tres imagens: o
+# instalador resolveu o layout FHS sob root, e trocar de usuario aqui deixaria o
+# venv e os runtimes do uv fora do alcance. O isolamento deste servico vem de
+# nao ter porta publica, nao do UID.
+ENV HERMES_HOME=/root/.hermes \
+    REVENUE_API_KEY_FILE=/run/secrets/revenue-api-key \
+    DOTNET_EnableDiagnostics=0
+
+ENTRYPOINT ["/usr/local/bin/hermes-entrypoint.sh"]

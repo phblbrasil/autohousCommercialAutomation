@@ -30,12 +30,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAgentRunRepository, AgentRunRepository>();
         services.AddSingleton<IOutboxRepository, OutboxRepository>();
         services.AddSingleton<IResearchProfilePersister, ResearchProfilePersister>();
+        services.AddSingleton<IWebsiteAuditPersister, WebsiteAuditPersister>();
         services.AddSingleton<ISearchRepository, SearchRepository>();
         services.AddSingleton<IEvidenceReadRepository, EvidenceReadRepository>();
         services.AddSingleton<IDatabaseHealthProbe, PostgresHealthProbe>();
         services.AddSingleton<IIngestionBatchRepository, IngestionBatchRepository>();
         services.AddSingleton<IAccountGraphRepository, AccountGraphRepository>();
         services.AddSingleton<IAccountScoreRepository, AccountScoreRepository>();
+        services.AddSingleton<IProductFitRepository, ProductFitRepository>();
+        services.AddSingleton<IProductFitPersister, ProductFitPersister>();
+        services.AddSingleton<IContactPersister, ContactPersister>();
+        services.AddSingleton<IAccountProgressRepository, AccountProgressRepository>();
 
         // Camada 01 — fonte oficial da Receita Federal (migrations 0013 e 0014).
         services.AddSingleton<IMarketStatisticsRepository, MarketStatisticsRepository>();

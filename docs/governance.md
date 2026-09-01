@@ -65,7 +65,7 @@ guardrail P0. Estado atual:
 |---|---|---|
 | `companies_raw`, `companies_cnpj`, `account_locations` | cadastro de **pessoa jurídica**, público por natureza | sem restrição adicional |
 | `company_partners` | **PII de pessoa física** — nome, CPF mascarado, faixa etária | opt-in por execução, sem política de retenção |
-| `contacts`, `contact_channels` | **PII de pessoa física** | vazias; entram com o People Finder (A05) |
+| `contacts`, `contact_channels` | **PII de pessoa física** | populadas pelo People Finder (A05), sob as guardas abaixo |
 
 Três observações que mudaram com a camada 01:
 
@@ -83,9 +83,50 @@ deliberado, não efeito colateral da carga mensal. Ver
 dígitos e os dois verificadores ocultos, por força do art. 129 §2º da Lei
 13.473/2017. Não existe caminho de código que o desmascare.
 
-**A política de retenção continua indefinida**, para as três tabelas de PII. É
-pré-requisito do People Finder, não desta entrega — e o opt-in existe justamente
-para que a base não acumule PII antes de a política existir.
+**A política de retenção continua indefinida**, para as três tabelas de PII.
+
+Isso passou a ser uma pendência **ativa**, e não teórica: até a entrega do People
+Finder, `contacts` e `contact_channels` estavam vazias e o risco era hipotético.
+Agora elas recebem escrita a cada conta do funil.
+
+## O que o People Finder (A05) grava, e o que ele recusa
+
+O único agente que produz PII de pessoa física é também o único com duas camadas
+de guarda em vez de uma. Além da Regra 1 — nada sem fonte —, valem as regras de
+`ContactPolicy`, impostas em três lugares:
+
+| Regra | Onde é imposta |
+|---|---|
+| confiança do contato ≥ 0,5 | `EvidenceFirstGuard` (recusa o run) + `check` na `0017` |
+| confiança do canal ≥ 0,6 | `EvidenceFirstGuard` + `check` na `0017` |
+| cada canal aponta para evidência **diferente** da do contato | `EvidenceFirstGuard` |
+| cargo é traduzido pela plataforma, não pelo agente | `PersonaCatalog`, no persister |
+
+O piso é imposto **recusando o run**, e não descartando a linha em silêncio. A
+diferença importa: se o modelo está devolvendo palpite, quem precisa saber é quem
+lê o erro do run — não um `where confidence >= 0.5` escondido no persister.
+
+**A regra do canal com fonte própria é a que mais rejeita run, e a que mais
+protege.** Achar o nome de um diretor numa notícia e achar o e-mail dele são duas
+descobertas. Um `nome.sobrenome@empresa.com.br` deduzido do padrão da casa passa
+em qualquer schema, tem formato válido e aponta para uma evidência real — a
+notícia que citava o nome. Só a regra de escopo o pega. Sem ela, a plataforma
+escreveria para um endereço que ninguém nunca viu.
+
+**Provedor pessoal entra marcado, e não bloqueado.** Um Gmail publicado como
+contato da empresa é como revenda pequena opera de verdade; descartá-lo deixaria
+a conta sem contato nenhum. `contact_channels.is_professional` registra a
+distinção, e o e-mail simplesmente não conta como profissional na pontuação.
+
+**O que o agente não procura**, por instrução no prompt versionado e na skill:
+endereço residencial, CPF, data de nascimento, estado civil, rede social pessoal,
+e qualquer dado de pessoa sem papel de decisão. Nada disso tem campo no contrato
+— `additionalProperties: false` fecha a porta que a instrução deixaria entreaberta.
+
+**O que continua sem guarda mecânica:** a origem da fonte. A skill proíbe
+agregador de dados pessoais e base vazada, e nenhuma checagem impõe isso — uma URL
+de agregador em `evidence[]` passa. É o buraco conhecido desta camada, e o
+candidato natural a uma lista de domínios recusados quando houver caso real.
 
 ## Segredos
 

@@ -19,20 +19,51 @@ internal static class AccountGraphStep
 
     internal sealed record Outcome(ResolveAccountGraphResult Graph, int ExitCode);
 
-    public static async Task<Outcome> RunAsync(
+    public static Task<Outcome> RunAsync(
         IServiceProvider provider,
         IngestCompanyBatchResult captured,
+        ILogger logger,
+        CancellationToken ct) =>
+        RunAsync(provider, captured.BatchId, captured, logger, ct);
+
+    /// <summary>
+    /// Retomada: resolve um lote ja capturado, sem os numeros da captura.
+    ///
+    /// O resumo omite "linhas lidas / gravadas / duplicadas" de proposito - esses
+    /// numeros pertencem a execucao que capturou o lote, e reimprimi-los aqui
+    /// sugeriria que esta execucao os produziu.
+    /// </summary>
+    public static Task<Outcome> ResumeAsync(
+        IServiceProvider provider,
+        Guid batchId,
+        ILogger logger,
+        CancellationToken ct) =>
+        RunAsync(provider, batchId, captured: null, logger, ct);
+
+    private static async Task<Outcome> RunAsync(
+        IServiceProvider provider,
+        Guid batchId,
+        IngestCompanyBatchResult? captured,
         ILogger logger,
         CancellationToken ct)
     {
         var resolve = provider.GetRequiredService<ResolveAccountGraphUseCase>();
-        var graph = await resolve.ExecuteAsync(captured.BatchId, ct);
+        var graph = await resolve.ExecuteAsync(batchId, ct);
 
         Console.WriteLine();
-        Console.WriteLine($"Lote {captured.BatchId}");
-        Console.WriteLine($"  linhas lidas ............ {captured.TotalRows}");
-        Console.WriteLine($"  gravadas ................ {captured.AcceptedRows}");
-        Console.WriteLine($"  duplicadas .............. {captured.DuplicateRows}");
+        Console.WriteLine($"Lote {batchId}");
+
+        if (captured is not null)
+        {
+            Console.WriteLine($"  linhas lidas ............ {captured.TotalRows}");
+            Console.WriteLine($"  gravadas ................ {captured.AcceptedRows}");
+            Console.WriteLine($"  duplicadas .............. {captured.DuplicateRows}");
+        }
+        else
+        {
+            Console.WriteLine($"  linhas resolvidas ....... {graph.Processed} (retomada)");
+        }
+
         Console.WriteLine($"  rejeitadas .............. {graph.Rejected}");
         Console.WriteLine($"  contas criadas .......... {graph.CreatedAccounts}");
         Console.WriteLine($"  CNPJs anexados .......... {graph.AttachedCnpjs}");
