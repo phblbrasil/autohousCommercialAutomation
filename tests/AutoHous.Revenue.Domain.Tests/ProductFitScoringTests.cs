@@ -373,6 +373,48 @@ public class ProductFitScoringTests
         Assert.All(fits, f => Assert.Equal(100m, f.Reasons.Sum(r => r.MaxPoints)));
     }
 
+    /// <summary>
+    /// Produto que a AutoHous nao tem para vender NAO abre conversa, por mais
+    /// alta que seja a nota.
+    ///
+    /// O AutoTalk vencia a porta de entrada em conta grande sustentado por
+    /// `canal_de_conversa`, que paga 30 pontos pela AUSENCIA de um widget de
+    /// chat que a sonda reconheca - e a sonda so enxerga assinatura que ela
+    /// conhece. Dois problemas num: a evidencia mais fraca do arquivo decidindo
+    /// a entrada, e a entrada apontando para um produto que ainda nao existe.
+    ///
+    /// A nota continua sendo calculada de proposito. Apagar o produto apagaria
+    /// junto o registro de que a dor existia antes de haver o que vender.
+    /// </summary>
+    [Fact]
+    public void Produto_indisponivel_e_pontuado_mas_nunca_abre_a_conversa()
+    {
+        // Conta que faz o AutoTalk disparar: sem chat detectado, conversao
+        // baixa, muitas lojas e estoque grande.
+        var fits = ProductFitScoring.Calculate(Base() with
+        {
+            StoreCount = 8,
+            InventoryEstimate = 400,
+            Audit = new WebsiteAuditDetail
+            {
+                Conversion = 0.1m, Inventory = 0.8m, Performance = 0.9m,
+                Seo = 0.9m, Mobile = 0.9m, Tracking = 0.9m
+            },
+            Technologies = []
+        });
+
+        var autoTalk = fits.Single(f => f.Product == ProductCatalog.AutoTalk);
+        var entrada = fits.SingleOrDefault(f => f.RecommendedEntry);
+
+        // A nota existe e e alta - o diagnostico nao foi suprimido.
+        Assert.True(autoTalk.Score > ProductFitScoring.EntryThreshold,
+            $"o cenario deveria fazer o AutoTalk disparar; veio {autoTalk.Score}");
+
+        // Mas ele nao abre a conversa.
+        Assert.False(autoTalk.RecommendedEntry);
+        Assert.NotEqual(ProductCatalog.AutoTalk, entrada?.Product);
+    }
+
     [Fact]
     public void Todo_produto_vendavel_tem_personas_no_catalogo()
     {

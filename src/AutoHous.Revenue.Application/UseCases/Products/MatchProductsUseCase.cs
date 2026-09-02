@@ -224,11 +224,22 @@ public sealed class MatchProductsUseCase(
     /// </summary>
     private static IReadOnlyList<ProductFit> Worthwhile(IReadOnlyList<ProductFit> calculated)
     {
-        var top = calculated.Max(f => f.Score);
+        // Só produto ofertável recebe argumento, e o filtro vem ANTES do corte
+        // relativo. A ordem importa: um indisponível com nota alta puxaria o
+        // corte de 70% para cima e derrubaria da lista produtos que a AutoHous
+        // tem para vender - o modelo gastaria contexto defendendo o que não se
+        // vende e calaria sobre o que se vende.
+        var ofertaveis = calculated
+            .Where(f => ProductCatalog.IsAvailable(f.Product))
+            .ToList();
+
+        if (ofertaveis.Count == 0) return [];
+
+        var top = ofertaveis.Max(f => f.Score);
 
         if (top < ProductFitScoring.EntryThreshold) return [];
 
-        return [.. calculated
+        return [.. ofertaveis
             .Where(f => f.Score >= Math.Max(ProductFitScoring.EntryThreshold, top * 0.7m))
             .OrderByDescending(f => f.RecommendedEntry)
             .ThenByDescending(f => f.Score)

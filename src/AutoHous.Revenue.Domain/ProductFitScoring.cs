@@ -169,7 +169,16 @@ public static class ProductFitScoring
             new() { Product = ProductCatalog.BoxTech,    Reasons = [.. BoxTech(inputs)] }
         };
 
+        // A porta de entrada só pode ser um produto OFERTÁVEL hoje.
+        //
+        // Sem este filtro, a maior nota da safra abre a conversa mesmo quando
+        // não existe o que vender — foi o que acontecia com o AutoTalk, que
+        // vencia a entrada em conta grande sem estar pronto para oferta. A nota
+        // dele continua sendo calculada e gravada de propósito: é o registro de
+        // que a dor existia antes de haver produto, e é o que responde "quantas
+        // contas esperavam por isso?" no dia em que ele existir.
         var entry = fits
+            .Where(f => ProductCatalog.IsAvailable(f.Product))
             .Where(f => f.Score >= EntryThreshold && f.Coverage >= EntryMinimumCoverage)
             .OrderByDescending(f => f.Score)
             .ThenByDescending(f => f.Coverage)
