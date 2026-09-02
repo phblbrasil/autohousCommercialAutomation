@@ -19,5 +19,6 @@
     <Project Path="tests/AutoHous.Revenue.Domain.Tests/AutoHous.Revenue.Domain.Tests.csproj" />
     <Project Path="tests/AutoHous.Revenue.Integration.Tests/AutoHous.Revenue.Integration.Tests.csproj" />
     <Project Path="tests/AutoHous.Revenue.ReceitaFederal.Tests/AutoHous.Revenue.ReceitaFederal.Tests.csproj" />
+    <Project Path="tests/AutoHous.Revenue.WebAudit.Tests/AutoHous.Revenue.WebAudit.Tests.csproj" />
   </Folder>
 </Solution>
