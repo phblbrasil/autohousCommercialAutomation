@@ -58,6 +58,15 @@ public sealed class ContactPersister(
         //    evidence_index, e o guard ja garantiu que todo indice cabe nele.
         var evidenceIds = await EvidenceWriter.WriteAllAsync(uow, request.AccountId, profile.Evidence, ct);
 
+        // 1b. O agent_run ANTES dos contatos que apontam para ele.
+        //
+        // `contacts.agent_run_id` ganhou FK na 0017, e o Postgres a verifica na
+        // hora - nao no commit -, entao gravar o contato primeiro estoura 23503
+        // dentro da transacao. O padrao antigo (runs por ultimo) era inofensivo
+        // enquanto a coluna era solta: e o que o WebsiteAuditPersister ainda
+        // faz, e passa, porque `website_audits.agent_run_id` nao tem FK.
+        await agentRuns.InsertAsync(uow, request.AgentRun, ct);
+
         foreach (var claim in profile.Contacts)
         {
             var persona = PersonaCatalog.Classify(claim.JobTitle);
@@ -135,8 +144,6 @@ public sealed class ContactPersister(
                 rejected_by_policy = rejected
             }, ContactJson),
             ct);
-
-        await agentRuns.InsertAsync(uow, request.AgentRun, ct);
 
         // 3. Evento de saida e baixa do de entrada, na mesma transacao.
         await outbox.EnqueueAsync(uow, new OutboxEvent

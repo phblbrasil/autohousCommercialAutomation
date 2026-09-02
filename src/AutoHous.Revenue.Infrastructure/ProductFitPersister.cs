@@ -66,6 +66,19 @@ public sealed class ProductFitPersister(
             ? []
             : await EvidenceWriter.WriteAllAsync(uow, request.AccountId, pitch.Evidence, ct);
 
+        // 1b. O agent_run ANTES das linhas que apontam para ele.
+        //
+        // `product_fit.agent_run_id` ganhou FK na 0017, e o Postgres a verifica
+        // na hora - nao no commit -, entao gravar o fit primeiro estoura
+        // 23503 dentro da transacao. O padrao antigo (runs por ultimo, junto do
+        // research_run) era inofensivo enquanto a coluna era solta: e o que o
+        // WebsiteAuditPersister ainda faz, e passa, porque
+        // `website_audits.agent_run_id` nao tem FK.
+        //
+        // O `research_run` que este agent_run referencia ja existe: quem o criou
+        // foi o Orchestrator, antes de emitir o comando.
+        await agentRuns.InsertAsync(uow, request.AgentRun, ct);
+
         var byProduct = pitch?.Pitches.ToDictionary(p => p.Product, StringComparer.OrdinalIgnoreCase)
                         ?? [];
 
@@ -203,8 +216,6 @@ public sealed class ProductFitPersister(
             Completeness(request.Fits),
             JsonSerializer.Serialize(new { fits = request.Fits, pitch }, FitJson),
             ct);
-
-        await agentRuns.InsertAsync(uow, request.AgentRun, ct);
 
         // 6. Evento de saida e baixa do de entrada, na mesma transacao.
         var entry = request.Fits.FirstOrDefault(f => f.RecommendedEntry);
