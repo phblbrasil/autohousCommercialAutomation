@@ -34,6 +34,7 @@ public sealed class AccountProgressRepository(NpgsqlConnectionFactory connection
                    tier                      as Tier,
                    product_fit_batch_id      as ProductFitBatchId,
                    product_fit_at            as ProductFitAt,
+                   has_recommended_entry     as HasRecommendedEntry,
                    has_blocking_disqualifier as HasBlockingDisqualifier,
                    contacts_searched_at      as ContactsSearchedAt,
                    has_decision_maker        as HasDecisionMaker
@@ -58,6 +59,7 @@ public sealed class AccountProgressRepository(NpgsqlConnectionFactory connection
             Tier = row.Tier,
             ProductFitBatchId = row.ProductFitBatchId,
             ProductFitAt = ToOffset(row.ProductFitAt),
+            HasRecommendedEntry = row.HasRecommendedEntry,
             HasBlockingDisqualifier = row.HasBlockingDisqualifier,
             ContactsSearchedAt = ToOffset(row.ContactsSearchedAt),
             HasDecisionMaker = row.HasDecisionMaker
@@ -88,6 +90,7 @@ public sealed class AccountProgressRepository(NpgsqlConnectionFactory connection
         public short? Tier { get; init; }
         public Guid? ProductFitBatchId { get; init; }
         public DateTime? ProductFitAt { get; init; }
+        public bool HasRecommendedEntry { get; init; }
         public bool HasBlockingDisqualifier { get; init; }
         public DateTime? ContactsSearchedAt { get; init; }
         public bool HasDecisionMaker { get; init; }

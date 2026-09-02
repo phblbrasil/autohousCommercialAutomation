@@ -165,7 +165,8 @@ public class DecideNextActionUseCaseTests
         var c = Montar(Pontuada() with
         {
             ProductFitBatchId = fitId,
-            ProductFitAt = Now.AddMinutes(-30)
+            ProductFitAt = Now.AddMinutes(-30),
+            HasRecommendedEntry = true
         });
 
         var result = await c.UseCase.ExecuteAsync(c.AccountId, c.SourceEventId);
@@ -189,6 +190,7 @@ public class DecideNextActionUseCaseTests
         {
             ProductFitBatchId = Guid.NewGuid(),
             ProductFitAt = Now.AddMinutes(-30),
+            HasRecommendedEntry = true,
             ContactsSearchedAt = Now.AddMinutes(-10),
             HasDecisionMaker = true
         });
@@ -311,6 +313,46 @@ public class DecideNextActionUseCaseTests
         Assert.Single(c.Outbox.Enqueued);
     }
 
+    /// <summary>
+    /// Comando descartado por idempotencia nao pode deixar research_run para
+    /// tras. E a guarda mais cara deste arquivo se faltar.
+    ///
+    /// O run nasce `queued`, e `queued` e o que <c>has_run_in_flight</c> le. Um
+    /// run que nenhum comando vai executar - porque o comando foi descartado -
+    /// prende a conta em <c>Wait</c> em TODA decisao seguinte, e nao ha lease no
+    /// claim do outbox nem varredura de run velho para desfazer. A conta some do
+    /// funil sem erro, sem log e sem linha vermelha em lugar nenhum.
+    ///
+    /// Por isso a ordem importa: enfileirar primeiro, criar o run so depois de
+    /// saber que o comando entrou.
+    /// </summary>
+    [Fact]
+    public async Task Comando_descartado_por_idempotencia_nao_deixa_run_orfao()
+    {
+        var c = Montar(Pontuada());
+
+        var primeira = await c.UseCase.ExecuteAsync(c.AccountId, c.SourceEventId);
+
+        var segundoEvento = Guid.NewGuid();
+        var segunda = await c.UseCase.ExecuteAsync(c.AccountId, segundoEvento);
+
+        Assert.Equal(NextAction.MatchProducts, primeira.Action);
+        Assert.Equal(NextAction.MatchProducts, segunda.Action);
+
+        // Um comando, um run.
+        Assert.Single(c.Outbox.Enqueued);
+        Assert.Single(c.Runs.Created);
+
+        // E o resultado nao inventa um evento que nao existe no outbox.
+        Assert.NotNull(primeira.EnqueuedEventId);
+        Assert.Null(segunda.EnqueuedEventId);
+        Assert.Null(segunda.ResearchRunId);
+
+        // O evento de entrada da segunda passada ainda e baixado: deixa-lo
+        // pendente o faria voltar para sempre pedindo a mesma decisao.
+        Assert.Contains(segundoEvento, c.Outbox.Processed);
+    }
+
     // ------------------------------------------- contrato produtor/consumidor
 
     /// <summary>
@@ -396,7 +438,8 @@ public class DecideNextActionUseCaseTests
         EventTypes.ContactsRequested => Pontuada() with
         {
             ProductFitBatchId = Guid.NewGuid(),
-            ProductFitAt = Now.AddMinutes(-30)
+            ProductFitAt = Now.AddMinutes(-30),
+            HasRecommendedEntry = true
         },
 
         _ => throw new InvalidOperationException($"Retrato nao definido para {eventType}.")

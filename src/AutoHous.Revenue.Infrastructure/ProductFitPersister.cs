@@ -29,6 +29,31 @@ public sealed class ProductFitPersister(
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
+    /// <summary>
+    /// Por quanto tempo um desqualificador tira a conta da fila quente.
+    ///
+    /// Nulo - "nunca vence" - era o comportamento anterior, e o problema nao e
+    /// filosofico: a view le <c>expires_at is null or expires_at &gt; now()</c>,
+    /// entao o bloqueio valia para sempre e NAO existe endpoint para revisar ou
+    /// limpar a linha. "Revisao humana antes de abordar", que e o que a 0017
+    /// escreveu como intencao, virava exclusao definitiva por omissao.
+    ///
+    /// Seis meses e o mesmo horizonte em que os outros sinais deste dominio
+    /// perdem forca (ver <c>ProductFitScoring.Recency</c>, que zera em um ano) e
+    /// e generoso para os casos que o agente costuma achar - recuperacao
+    /// judicial, encerramento, mudanca de ramo. Vencer NAO e o mesmo que
+    /// aprovar: a conta volta a ser avaliada do zero, com os fatos de entao.
+    ///
+    /// Isto e decisao de produto, e esta aqui em vez de espalhada no SQL para
+    /// ser encontravel no dia em que alguem discordar do prazo.
+    ///
+    /// Em dias e nao <see cref="TimeSpan"/> porque o SQL o multiplica por
+    /// <c>interval '1 day'</c>: um parametro inteiro tem tipo obvio dos dois
+    /// lados, e este persister nao tem teste de integracao que pegasse uma
+    /// surpresa de mapeamento.
+    /// </summary>
+    private const int DisqualifierHorizonDays = 180;
+
     public async Task PersistAsync(ProductFitPersistRequest request, CancellationToken ct = default)
     {
         var pitch = request.Pitch;
@@ -123,17 +148,34 @@ public sealed class ProductFitPersister(
         //    fatos datados com evidencia sobre a conta, que e o que `signals`
         //    guarda. Severidade `high` vale -1, o valor que a view
         //    v_account_progress le como bloqueio.
+        //
+        //    So quando o agente rodou: pitch nulo e ausencia de informacao nova,
+        //    e ausencia de informacao nova nao revoga o que ja se sabia.
         if (pitch is not null)
         {
+            // A safra nova SUBSTITUI a anterior. Sem isto, cada execucao do
+            // matcher empilha mais uma copia do mesmo desqualificador - e
+            // `product_fit` e append-only, entao o matcher roda de novo a cada
+            // score novo. Vencer em vez de apagar preserva o historico: a linha
+            // continua respondendo "o que sabiamos em agosto?".
+            await uow.Db().ExecuteAsync(new CommandDefinition("""
+                update signals
+                   set expires_at = now()
+                 where account_id = @AccountId
+                   and signal_type = 'disqualifier'
+                   and (expires_at is null or expires_at > now())
+                """,
+                new { request.AccountId }, uow.Tx(), cancellationToken: ct));
+
             foreach (var disqualifier in pitch.Disqualifiers)
             {
                 await uow.Db().ExecuteAsync(new CommandDefinition("""
                     insert into signals
                         (id, account_id, signal_type, strength, title, description,
-                         evidence_id, observed_at)
+                         evidence_id, observed_at, expires_at)
                     values
                         (@Id, @AccountId, @SignalType, @Strength, @Title, @Description,
-                         @EvidenceId, now())
+                         @EvidenceId, now(), now() + (@HorizonDays * interval '1 day'))
                     """,
                     new
                     {
@@ -148,7 +190,8 @@ public sealed class ProductFitPersister(
                         },
                         Title = $"Desqualificador ({disqualifier.Severity})",
                         Description = disqualifier.Reason,
-                        EvidenceId = At(evidenceIds, disqualifier.EvidenceIndex)
+                        EvidenceId = At(evidenceIds, disqualifier.EvidenceIndex),
+                        HorizonDays = DisqualifierHorizonDays
                     }, uow.Tx(), cancellationToken: ct));
             }
         }

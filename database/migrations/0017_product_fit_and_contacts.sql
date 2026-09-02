@@ -217,6 +217,7 @@ select
 
   f.id                                   as product_fit_batch_id,
   f.calculated_at                        as product_fit_at,
+  coalesce(f.recommended_entry, false)   as has_recommended_entry,
 
   exists (
     select 1 from signals g
@@ -245,14 +246,33 @@ left join lateral (
   select sc.id, sc.calculated_at
   from account_scores sc
   where sc.account_id = a.id
-  order by sc.calculated_at desc
+  order by sc.calculated_at desc, sc.id desc
   limit 1
 ) s on true
+-- A safra de fit, representada pela linha DE ENTRADA quando ela existe.
+--
+-- As tres clausulas de ordenacao sao tres decisoes, e nenhuma e cosmetica:
+--
+--   calculated_at desc   a safra mais nova;
+--   recommended_entry    dentro dela, a linha da porta de entrada - que e a que
+--                        `has_recommended_entry` reporta e a que as personas da
+--                        busca de contatos saem;
+--   id desc              desempate final.
+--
+-- O desempate NAO e zelo excessivo. `product_fit.calculated_at` tem default
+-- `now()`, que no Postgres e o inicio da TRANSACAO: as cinco linhas de uma safra
+-- carregam o mesmo timestamp ao microssegundo. Um `order by calculated_at desc
+-- limit 1` sem desempate deixa a escolha para o planner, e `product_fit_batch_id`
+-- passa a oscilar entre leituras da mesma safra.
+--
+-- Isso corroeria em silencio a chave `contacts:{conta}:{safra}`, cujo proposito
+-- e justamente "uma busca por safra de fit": id oscilando e chave nova, e a
+-- chamada de modelo que a chave existe para evitar acontece assim mesmo.
 left join lateral (
-  select pf.id, pf.calculated_at
+  select pf.id, pf.calculated_at, pf.recommended_entry
   from product_fit pf
   where pf.account_id = a.id
-  order by pf.calculated_at desc
+  order by pf.calculated_at desc, pf.recommended_entry desc, pf.id desc
   limit 1
 ) f on true;
 

@@ -62,8 +62,25 @@ public sealed record AccountProgress
     public DateTimeOffset? ScoredAt { get; init; }
     public short? Tier { get; init; }
 
+    /// <summary>
+    /// A linha de <c>product_fit</c> que ancora a safra vigente: a de entrada,
+    /// quando existe. E o que a chave de idempotencia da busca de contatos usa
+    /// para dizer "ja procuramos sobre ESTE fit".
+    /// </summary>
     public Guid? ProductFitBatchId { get; init; }
+
     public DateTimeOffset? ProductFitAt { get; init; }
+
+    /// <summary>
+    /// A safra vigente elegeu porta de entrada, ou seja: algum produto passou do
+    /// <c>ProductFitScoring.EntryThreshold</c>.
+    ///
+    /// Nao e o mesmo que "tem fit calculado". O Product Matcher grava a
+    /// aritmetica de todos os cinco produtos mesmo quando nenhum passa do corte
+    /// - e ela que da ordem a fila -, entao <see cref="ProductFitAt"/> fica
+    /// preenchido nos dois casos e nao distingue um do outro.
+    /// </summary>
+    public bool HasRecommendedEntry { get; init; }
 
     /// <summary>Achado do Product Matcher que desaconselha abordar agora.</summary>
     public bool HasBlockingDisqualifier { get; init; }
@@ -133,9 +150,33 @@ public static class AccountOrchestration
             return new OrchestrationDecision(NextAction.Research, "conta nunca pesquisada");
         }
 
+        // Retrato raso: a pesquisa se refaz antes de qualquer outra coisa - mas
+        // so quando o retrato ja venceu.
+        //
+        // Sem a segunda condicao isto e um laco que se alimenta sozinho.
+        // `research.completed` chega, a completude continua abaixo do piso,
+        // pede-se pesquisa de novo, o persister emite `research.completed`
+        // outra vez, e nao existe evento externo nenhum sustentando o giro.
+        // Pior: a completude e declarada pelo PROPRIO agente, e uma revenda sem
+        // presenca digital devolve 0,25 com toda honestidade - entao o laco cai
+        // exatamente nas contas onde a pesquisa rende menos, e gira gastando
+        // modelo ate alguem ver a fatura.
+        //
+        // `next_research_at` e a mesma guarda que o retrato vencido usa logo
+        // abaixo; aqui ela decide entre insistir e esperar. Conta rasa ainda no
+        // prazo sai da fila quente em vez de rodar em falso - e volta quando o
+        // retrato vencer, pelo mesmo caminho de qualquer outra conta vencida.
         if (progress.ResearchCompleteness is { } completeness &&
             completeness < MinimumResearchCompleteness)
         {
+            if (progress.NextResearchAt is { } retry && retry > now)
+            {
+                return new OrchestrationDecision(NextAction.Nurture,
+                    $"completude da pesquisa em {completeness:P0}, abaixo do piso de " +
+                    $"{MinimumResearchCompleteness:P0}, e o retrato so vence em {retry:yyyy-MM-dd}: " +
+                    "repesquisar agora repetiria a mesma busca");
+            }
+
             return new OrchestrationDecision(NextAction.Research,
                 $"completude da pesquisa em {completeness:P0}, abaixo do piso de {MinimumResearchCompleteness:P0}");
         }
@@ -204,7 +245,24 @@ public static class AccountOrchestration
                 "desqualificador registrado: revisao humana antes de abordar");
         }
 
-        // 9. Contatos. A pergunta e "ja procuramos?", e nao "temos?": uma busca
+        // 9. Fit calculado nao e fit encontrado.
+        //
+        // O Product Matcher grava a aritmetica dos cinco produtos mesmo quando
+        // nenhum passa do corte: e ela que da ordem a fila, e omiti-la
+        // esconderia por que um produto NAO foi escolhido. O efeito colateral e
+        // que `ProductFitAt` fica preenchido nos dois casos.
+        //
+        // Sem esta guarda, uma conta cujo melhor produto pontuou 30 seguiria
+        // para a busca de pessoas - uma chamada de modelo para achar o decisor
+        // de uma conversa que a propria plataforma julgou nao existir. O corte
+        // de tier nao cobre o caso: tier 3 passa pelo passo 6 e chega aqui.
+        if (!progress.HasRecommendedEntry)
+        {
+            return new OrchestrationDecision(NextAction.Nurture,
+                "nenhum produto acima do corte de fit: nao ha porta de entrada para abrir conversa");
+        }
+
+        // 10. Contatos. A pergunta e "ja procuramos?", e nao "temos?": uma busca
         //    que voltou vazia e resultado, e repeti-la a cada evento gastaria
         //    uma chamada de modelo para reconfirmar a mesma ausencia.
         if (progress.ContactsSearchedAt is null)
@@ -218,7 +276,7 @@ public static class AccountOrchestration
                 "fit novo desde a ultima busca: as personas a procurar mudaram");
         }
 
-        // 10. Pronta, ou nao ha mais nada automatico a fazer.
+        // 11. Pronta, ou nao ha mais nada automatico a fazer.
         return progress.HasDecisionMaker
             ? new OrchestrationDecision(NextAction.MarkReady, "retrato, dor, produto e decisor: pronta para abordagem")
             : new OrchestrationDecision(NextAction.Nurture, "busca de contatos concluida sem decisor identificado");

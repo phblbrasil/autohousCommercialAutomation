@@ -16,11 +16,11 @@
 
 | | |
 |---|---|
-| Testes | **545/545** verdes |
+| Testes | **550/550** verdes |
 | Migrations aplicadas no banco de dev | **16** de 17 — a `0017` ainda não rodou |
 | Carga da Receita `2026-08` | ✅ **concluída** |
 | Website Auditor (A03) | ✅ fatia completa, testada ponta a ponta |
-| Orchestrator (A01), Product Matcher (A04), People Finder (A05) | 🟡 código presente, ver §5 |
+| Orchestrator (A01), Product Matcher (A04), People Finder (A05) | ✅ revisados, seis defeitos corrigidos — ver §5 |
 | Hermes real (`AGENT_RUNTIME=hermes`) | ❌ nunca executou — falta credencial de modelo |
 | Railway | ❌ escrito, nunca construído |
 
@@ -182,31 +182,68 @@ um Bearer seria a única coisa entre a internet e um shell.
 
 ---
 
-## 5. O que está no meio do caminho
+## 5. A revisão de A01, A04 e A05 — feita
 
-**Orchestrator (A01), Product Matcher (A04), People Finder (A05)** apareceram na
-árvore durante esta sessão — não fui eu que os escrevi. O código compila e os 545
-testes passam, mas **eu não os revisei**. Antes de confiar neles:
+O handoff anterior registrava esses três como "código presente, não revisado".
+**Foram revisados linha a linha.** Seis defeitos corrigidos, cinco regressões
+novas, 550/550 verdes.
 
-- a migration `0017_product_fit_and_contacts.sql` **não foi aplicada** ao banco de
-  dev (ele está em 16). Rode o Migrator.
-- confira se os novos repositórios sofrem do mesmo cast implícito da §4.3.
+A dúvida que o handoff levantava — se os repositórios novos sofriam do cast
+implícito da §4.3 — **não se confirmou**. As sete colunas `character(n)` do
+schema não são tocadas pelo código novo; o único acesso a `companies_cnpj` filtra
+por `account_id` (uuid), com Index Only Scan confirmado.
+
+O que estava errado era outra coisa:
+
+| | Defeito | Correção |
+|---|---|---|
+| 1 | **Laço infinito de pesquisa.** O ramo de completude baixa devolvia `Research` sem consultar `next_research_at`. A cadeia se alimentava sozinha — `research.completed` → `Research` → `research.completed` — sem evento externo nenhum, sem erro e sem run falhado. E a completude é declarada pelo **próprio agente**: a conta sem presença digital devolve 0,25 com honestidade, então o laço caía justamente onde a pesquisa rende menos. | `AccountOrchestration` respeita o cooldown; conta rasa no prazo vai para `Nurture` |
+| 2 | **Safra de fit instável.** `product_fit.calculated_at` tem default `now()`, que é o início da **transação**: as cinco linhas de uma safra têm o mesmo timestamp. O `order by calculated_at desc limit 1` da view não desempatava, e `product_fit_batch_id` oscilava — corroendo em silêncio a chave `contacts:{conta}:{safra}` | lateral da `0017` ordena por `calculated_at desc, recommended_entry desc, id desc` |
+| 3 | **AutoFollow somava 95** contra 100 dos outros quatro, e `RecommendedEntry` os compara por `Score`: desconto estrutural na disputa pela porta de entrada | `captura_sem_destino` foi para 35 |
+| 4 | **Run órfão.** O `research_run` nascia antes do `EnqueueAsync`, cujo retorno era descartado — e ele faz `on conflict do nothing`. Comando descartado deixava um run `queued` que prendia a conta em `Wait` para sempre: não há lease no claim do outbox nem varredura de run velho | enfileira primeiro, cria o run só se o comando entrou |
+| 5 | **Desqualificador eterno e duplicado.** Sem `expires_at` e sem dedupe: bloqueio permanente sem endpoint de revisão, mais uma cópia a cada safra | safra nova vence a anterior; horizonte de 180 dias |
+| 6 | **Fit abaixo do corte gastava o People Finder.** `ProductFitAt` fica preenchido mesmo quando nenhum produto passa do corte; o corte de tier só pega tier ≥ 4 | passo novo lendo `has_recommended_entry` |
+
+**A `0017` foi editada, não emendada.** Os itens 2 e 6 mexem na view
+`v_account_progress`, e isso só foi legítimo porque a migration nunca tinha
+rodado. Depois de aplicada, a mesma correção custaria uma `0018`.
+
+### O que a revisão deixou em aberto
+
+- **Um teste de integração intermitente.** Uma falha em seis execuções, não
+  reproduzida em quatro tentativas seguintes, teste não identificado.
+  `OutboxConcurrencyTests` é o suspeito natural. Não é do diff da revisão — o
+  vermelho apareceu numa build cujas mudanças as verdes seguintes também tinham.
+- **`ProductFitPersister` não tem teste de integração.** Nenhum SQL dele toca um
+  Postgres real na suíte. Foi por isso que o horizonte do desqualificador é `int`
+  de dias multiplicado por `interval '1 day'`, e não `TimeSpan`: não quis apoiar
+  em inferência de tipo do Npgsql o que nenhum teste pegaria. `WebsiteAuditSliceTests`
+  é o molde pronto para pagar isso.
+- **`v_account_current_fit` é `select *` congelado na 0009** — não expõe
+  `coverage`, `pitch_confidence` nem `account_score_id`, que a `0017` acrescentou.
+  Funciona hoje porque `GetCurrentAsync` só lê colunas antigas; é armadilha para a
+  próxima consulta.
+- **A01, A04 e A05 não têm superfície HTTP nenhuma.** Nada lê `product_fit`,
+  `contacts` ou `v_account_progress`, e não há como disparar o Orchestrator à mão.
+  Três agentes que só existem dentro da cadeia do outbox, sem janela de inspeção —
+  e é isso que torna o item 4 acima latente em vez de fatal hoje.
 
 ---
 
 ## 6. Próximos passos, em ordem
 
-1. **Aplicar a migration 0017** — o banco de dev está uma atrás.
-2. **`hermes setup --portal`** — interativo, a credencial é sua. Sem isso o
+1. **`hermes setup --portal`** — interativo, a credencial é sua. Sem isso o
    gateway sobe e todo run falha. Passo a passo em
    [docs/hermes-runbook.md](docs/hermes-runbook.md).
-3. **`./scripts/hermes-setup.sh`** — `HERMES_API_SERVER_KEY` está vazia no `.env`
+2. **`./scripts/hermes-setup.sh`** — `HERMES_API_SERVER_KEY` está vazia no `.env`
    e o MCP nunca foi publicado.
-4. **Ensaiar com `AGENT_RUNTIME=fixture`** antes de gastar modelo. Se falhar em
+3. **Ensaiar com `AGENT_RUNTIME=fixture`** antes de gastar modelo. Se falhar em
    fixture, o problema não é o Hermes.
-5. **Validar `docker build -f deploy/Dockerfile.hermes`** — nunca foi construído.
+4. **Validar `docker build -f deploy/Dockerfile.hermes`** — nunca foi construído.
    O layout de instalação veio do `install.sh`, não de um build real.
-6. **Olhar o quality gate de 82,2%** — 126 mil linhas em revisão é muito.
+5. **Olhar o quality gate de 82,2%** — 126 mil linhas em revisão é muito.
+6. **Pagar a cobertura de integração do `ProductFitPersister`** e caçar o teste
+   intermitente da §5.
 
 ---
 

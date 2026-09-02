@@ -285,17 +285,26 @@ public static class ProductFitScoring
 
         // O achado que define o produto: o site CAPTURA lead e nao ha CRM a
         // vista. Sem captura, nao ha follow-up a fazer, e a dor e outra.
+        //
+        // Vale 35 e nao 30 porque os outros quatro criterios somam 60: com 30
+        // aqui o AutoFollow tinha teto 95 enquanto FrontCar, MotorHub, AutoTalk
+        // e BoxTech chegavam a 100. Como `RecommendedEntry` sai de um
+        // `OrderByDescending(Score)` entre os cinco, isso era um desconto de 5
+        // pontos na disputa pela porta de entrada - estrutural, silencioso e sem
+        // nada no diagnostico que o justificasse. O peso que faltava foi para o
+        // criterio que DEFINE o produto, no mesmo patamar do `atrito_de_contato`
+        // do AutoTalk.
         var capturesLead = a?.Conversion is > 0.2m;
 
         yield return new ProductFitReason(
             "captura_sem_destino",
             (capturesLead, hasCrm) switch
             {
-                (true, false) => 30m,
-                (true, true) => 8m,
+                (true, false) => 35m,
+                (true, true) => 10m,
                 _ => 0m
             },
-            30m, auditRan,
+            35m, auditRan,
             !auditRan ? "sem auditoria de captura de lead"
                 : (capturesLead, hasCrm) switch
                 {

@@ -82,6 +82,57 @@ public class AccountOrchestrationTests
     }
 
     /// <summary>
+    /// A guarda contra o laco mais caro que este orquestrador consegue produzir.
+    ///
+    /// A cadeia se alimenta sozinha: `research.completed` chega, a completude
+    /// continua abaixo do piso, pede-se pesquisa de novo, o persister emite
+    /// `research.completed` outra vez. Nao ha evento externo nenhum sustentando
+    /// o giro - e nao ha erro, nem log vermelho, nem run falhado. So fatura.
+    ///
+    /// E cai exatamente onde dói mais: `research_completeness` e declarada pelo
+    /// PROPRIO agente, e uma revenda sem presenca digital devolve 0,25 com toda
+    /// honestidade. As contas onde a pesquisa rende menos eram as que mais
+    /// rodavam.
+    ///
+    /// `next_research_at` e a guarda que ja existia para o retrato vencido; o
+    /// ramo da completude passava por cima dela.
+    /// </summary>
+    [Fact]
+    public void Pesquisa_rasa_dentro_do_prazo_nao_repesquisa_em_laco()
+    {
+        var progress = Conta(AccountStatus.Researched) with
+        {
+            LastResearchedAt = Now.AddMinutes(-1),
+            ResearchCompleteness = 0.2m,
+            NextResearchAt = Now.AddDays(30),
+            HasDomain = true
+        };
+
+        var decision = AccountOrchestration.Decide(progress, Now);
+
+        Assert.Equal(NextAction.Nurture, decision.Action);
+        Assert.NotEqual(NextAction.Research, decision.Action);
+    }
+
+    /// <summary>
+    /// Vencido o prazo, a conta rasa volta a ser pesquisada: a guarda acima e
+    /// cooldown, e nao desistencia.
+    /// </summary>
+    [Fact]
+    public void Pesquisa_rasa_com_prazo_vencido_e_refeita()
+    {
+        var progress = Conta(AccountStatus.Researched) with
+        {
+            LastResearchedAt = Now.AddDays(-40),
+            ResearchCompleteness = 0.2m,
+            NextResearchAt = Now.AddDays(-1),
+            HasDomain = true
+        };
+
+        Assert.Equal(NextAction.Research, Decide(progress));
+    }
+
+    /// <summary>
     /// Auditoria depende de dominio, e quem descobre o dominio e a pesquisa.
     /// Sem essa precedencia, o auditor seria chamado para uma conta sem site
     /// conhecido e falharia por pre-condicao a cada evento.
@@ -221,16 +272,51 @@ public class AccountOrchestrationTests
         Assert.NotEqual(NextAction.Stop, decision.Action);
     }
 
+    /// <summary>
+    /// A safra vigente com porta de entrada: fit calculado E algum produto
+    /// acima do corte. E o unico estado a partir do qual vale gastar uma busca
+    /// de pessoas.
+    /// </summary>
+    private static AccountProgress ComFit(short tier = 2) => Pontuada(tier) with
+    {
+        ProductFitBatchId = Guid.NewGuid(),
+        ProductFitAt = Now.AddMinutes(-30),
+        HasRecommendedEntry = true
+    };
+
     [Fact]
     public void Conta_com_fit_e_sem_busca_de_contatos_procura_pessoas()
     {
-        var progress = Pontuada() with
+        Assert.Equal(NextAction.FindContacts, Decide(ComFit()));
+    }
+
+    /// <summary>
+    /// Fit calculado nao e fit encontrado, e a diferenca custa uma chamada de
+    /// modelo.
+    ///
+    /// O Product Matcher grava a aritmetica dos cinco produtos mesmo quando
+    /// nenhum passa do corte - e ela que da ordem a fila -, entao
+    /// <c>ProductFitAt</c> fica preenchido nos dois casos e sozinho nao
+    /// distingue "achei o produto" de "olhei e nao ha". Sem esta guarda, uma
+    /// conta cujo melhor produto pontuou 30 seguia para o People Finder atras do
+    /// decisor de uma conversa que a plataforma ja tinha julgado inexistente.
+    ///
+    /// O corte de tier nao cobre o caso: tier 3 passa pelo passo 6 e chega aqui.
+    /// </summary>
+    [Fact]
+    public void Fit_sem_produto_acima_do_corte_nao_gasta_busca_de_pessoas()
+    {
+        var progress = Pontuada(tier: 3) with
         {
             ProductFitBatchId = Guid.NewGuid(),
-            ProductFitAt = Now.AddMinutes(-30)
+            ProductFitAt = Now.AddMinutes(-30),
+            HasRecommendedEntry = false
         };
 
-        Assert.Equal(NextAction.FindContacts, Decide(progress));
+        var decision = AccountOrchestration.Decide(progress, Now);
+
+        Assert.Equal(NextAction.Nurture, decision.Action);
+        Assert.NotEqual(NextAction.FindContacts, decision.Action);
     }
 
     /// <summary>
@@ -242,10 +328,8 @@ public class AccountOrchestrationTests
     [Fact]
     public void Busca_vazia_ja_feita_nao_e_repetida()
     {
-        var progress = Pontuada() with
+        var progress = ComFit() with
         {
-            ProductFitBatchId = Guid.NewGuid(),
-            ProductFitAt = Now.AddMinutes(-30),
             ContactsSearchedAt = Now.AddMinutes(-10),
             HasDecisionMaker = false
         };
@@ -261,9 +345,8 @@ public class AccountOrchestrationTests
     {
         // As personas a procurar saem do produto de entrada; fit novo pode
         // mudar quem procurar.
-        var progress = Pontuada() with
+        var progress = ComFit() with
         {
-            ProductFitBatchId = Guid.NewGuid(),
             ProductFitAt = Now.AddMinutes(-10),
             ContactsSearchedAt = Now.AddDays(-3),
             HasDecisionMaker = true
@@ -275,10 +358,8 @@ public class AccountOrchestrationTests
     [Fact]
     public void Conta_completa_com_decisor_fica_pronta()
     {
-        var progress = Pontuada() with
+        var progress = ComFit() with
         {
-            ProductFitBatchId = Guid.NewGuid(),
-            ProductFitAt = Now.AddMinutes(-30),
             ContactsSearchedAt = Now.AddMinutes(-10),
             HasDecisionMaker = true
         };
@@ -296,10 +377,9 @@ public class AccountOrchestrationTests
     [Fact]
     public void Retrato_vencido_volta_para_a_pesquisa()
     {
-        var progress = Pontuada() with
+        var progress = ComFit() with
         {
             NextResearchAt = Now.AddDays(-1),
-            ProductFitBatchId = Guid.NewGuid(),
             ProductFitAt = Now.AddMinutes(-10),
             ContactsSearchedAt = Now.AddMinutes(-5),
             HasDecisionMaker = true
@@ -311,10 +391,9 @@ public class AccountOrchestrationTests
     [Fact]
     public void Retrato_no_prazo_segue_o_funil()
     {
-        var progress = Pontuada() with
+        var progress = ComFit() with
         {
             NextResearchAt = Now.AddDays(20),
-            ProductFitBatchId = Guid.NewGuid(),
             ProductFitAt = Now.AddMinutes(-10),
             ContactsSearchedAt = Now.AddMinutes(-5),
             HasDecisionMaker = true

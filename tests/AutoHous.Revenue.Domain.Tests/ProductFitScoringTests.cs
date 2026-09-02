@@ -352,6 +352,27 @@ public class ProductFitScoringTests
         });
     }
 
+    /// <summary>
+    /// Os cinco produtos disputam a porta de entrada na MESMA escala.
+    ///
+    /// <c>RecommendedEntry</c> sai de um <c>OrderByDescending(Score)</c> entre os
+    /// cinco, entao um produto cujos criterios somem menos de 100 chega a essa
+    /// comparacao com desconto - estrutural, silencioso e sem nada no
+    /// diagnostico que o explique. Foi o que aconteceu: o AutoFollow somava 95
+    /// contra 100 dos outros quatro, e perdia empates que nao eram empates.
+    ///
+    /// O teste olha <c>MaxPoints</c> e nao a nota, porque o defeito nao aparece
+    /// em nenhum cenario isolado - so na comparacao entre produtos, que e
+    /// exatamente onde ninguem olha.
+    /// </summary>
+    [Fact]
+    public void Os_cinco_produtos_pontuam_na_mesma_escala()
+    {
+        var fits = ProductFitScoring.Calculate(Base());
+
+        Assert.All(fits, f => Assert.Equal(100m, f.Reasons.Sum(r => r.MaxPoints)));
+    }
+
     [Fact]
     public void Todo_produto_vendavel_tem_personas_no_catalogo()
     {

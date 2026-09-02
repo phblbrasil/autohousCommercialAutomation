@@ -90,24 +90,21 @@ public sealed class DecideNextActionUseCase(
 
         await using var uow = await unitOfWork.BeginAsync(ct);
 
-        Guid? runId = null;
         var eventId = ids.NewId();
 
         // Comandos que disparam um agente ganham research_run proprio. O
         // run_type distingue a safra: "por que esta conta tem cinco runs em
         // agosto?" so tem resposta se der para separar pesquisa de auditoria,
         // de fit e de busca de contatos.
+        //
+        // O id do run sai aqui, mas a LINHA so nasce depois de o comando entrar
+        // na fila - ver abaixo.
         var runType = RunTypeFor(decision.Action);
-
-        if (runType is not null)
-        {
-            runId = ids.NewId();
-            await researchRuns.CreateAsync(uow, runId.Value, accountId, runType, ct);
-        }
+        Guid? runId = runType is null ? null : ids.NewId();
 
         var (eventType, idempotencyKey) = Command(decision.Action, snapshot, runId, now);
 
-        await outbox.EnqueueAsync(uow, new OutboxEvent
+        var enqueued = await outbox.EnqueueAsync(uow, new OutboxEvent
         {
             Id = eventId,
             EventType = eventType,
@@ -124,6 +121,41 @@ public sealed class DecideNextActionUseCase(
             Status = OutboxStatus.Pending,
             AvailableAt = now
         }, ct);
+
+        // Comando ja estava na fila.
+        //
+        // `EnqueueAsync` faz `on conflict (idempotency_key) do nothing` e
+        // devolve Guid.Empty quando descarta - e as chaves de fit e de contatos
+        // ancoram na SAFRA, entao decidir duas vezes sobre o mesmo score ou o
+        // mesmo fit colide de proposito.
+        //
+        // O que nao pode acontecer e o efeito colateral sobreviver ao descarte.
+        // Criar o run antes de enfileirar deixava uma linha `queued` que nenhum
+        // comando iria executar, e `HasRunInFlight` la em cima prende a conta em
+        // `Wait` para sempre: nao ha lease no claim do outbox nem varredura de
+        // run velho, entao ninguem viria desfazer. Sair aqui, antes de qualquer
+        // escrita, e o que mantem "comando descartado" sem consequencia.
+        if (enqueued == Guid.Empty)
+        {
+            if (sourceEventId is { } duplicated)
+            {
+                await outbox.MarkProcessedAsync(uow, duplicated, ct);
+            }
+
+            await uow.CommitAsync(ct);
+
+            logger.LogInformation(
+                "Comando {EventType} da conta {AccountId} ja estava na fila ({Key}); nada a fazer.",
+                eventType, accountId, idempotencyKey);
+
+            return new DecideNextActionResult(
+                decision.Action, $"{decision.Rationale} (comando ja enfileirado)");
+        }
+
+        if (runId is { } newRun)
+        {
+            await researchRuns.CreateAsync(uow, newRun, accountId, runType!, ct);
+        }
 
         // MarkReady e o unico comando que tambem promove a conta: os outros
         // pedem trabalho, e quem promove e o resultado do trabalho.
