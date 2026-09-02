@@ -65,10 +65,15 @@ public class ResearchSliceTests : IAsyncLifetime
         // que dao lastro ao argumento comercial e ao contato. A 0017 tambem cria
         // a view v_account_progress, que nao entra nesta contagem por ser view.
         //
+        // E a da 0019: probe_samples, a base de calibracao do ADR-0013. Tabela
+        // propria e nao website_audits porque nao e auditoria de conta - e
+        // medicao de populacao sobre um dominio ADIVINHADO do e-mail da Receita,
+        // que nao pode alimentar Technology Pain nem abordagem comercial.
+        //
         // Contar tabelas parece frageis ate uma migration criar uma sem querer:
         // este numero e o que faz uma tabela nova aparecer na revisao em vez de
-        // entrar de carona.
-        Assert.Equal(31, tables);
+        // entrar de carona - foi exatamente o que aconteceu aqui.
+        Assert.Equal(32, tables);
     }
 
     [Fact]

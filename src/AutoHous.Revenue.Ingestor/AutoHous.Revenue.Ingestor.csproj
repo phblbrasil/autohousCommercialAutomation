@@ -19,6 +19,7 @@
     <ProjectReference Include="..\AutoHous.Revenue.Domain\AutoHous.Revenue.Domain.csproj" />
     <ProjectReference Include="..\AutoHous.Revenue.Infrastructure\AutoHous.Revenue.Infrastructure.csproj" />
     <ProjectReference Include="..\AutoHous.Revenue.ReceitaFederal\AutoHous.Revenue.ReceitaFederal.csproj" />
+    <ProjectReference Include="..\AutoHous.Revenue.WebAudit\AutoHous.Revenue.WebAudit.csproj" />
   </ItemGroup>
 
 </Project>
