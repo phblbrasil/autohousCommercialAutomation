@@ -8,7 +8,7 @@
 > pior que nenhum — ele faz a próxima pessoa confiar em algo que já mudou.
 
 **Última atualização:** 01/09/2026
-**Branch:** `feat/website-auditor-e-carga-receita`
+**Branch:** `main` — a `feat/website-auditor-e-carga-receita` foi mergeada (fast-forward)
 
 ---
 
@@ -17,7 +17,7 @@
 | | |
 |---|---|
 | Testes | **550/550** verdes |
-| Migrations aplicadas no banco de dev | **16** de 17 — a `0017` ainda não rodou |
+| Migrations aplicadas no banco de dev | **17** de 17 — em dia |
 | Carga da Receita `2026-08` | ✅ **concluída** |
 | Website Auditor (A03) | ✅ fatia completa, testada ponta a ponta |
 | Orchestrator (A01), Product Matcher (A04), People Finder (A05) | ✅ revisados, seis defeitos corrigidos — ver §5 |
@@ -227,6 +227,15 @@ rodado. Depois de aplicada, a mesma correção custaria uma `0018`.
   `contacts` ou `v_account_progress`, e não há como disparar o Orchestrator à mão.
   Três agentes que só existem dentro da cadeia do outbox, sem janela de inspeção —
   e é isso que torna o item 4 acima latente em vez de fatal hoje.
+- **Duas contas já estão presas em `Wait` no banco de dev.** Aplicada a `0017`,
+  `v_account_progress` mostra `has_run_in_flight = true` para duas contas cujos
+  `research_runs` estão em `queued` desde 31/08 18:00 e 01/09 01:20 — nunca
+  começaram, nunca terminaram. São de pedidos manuais anteriores ao Orchestrator,
+  então não foram ele que as criou; mas agora que o passo 2 da decisão lê esse
+  campo, **essas duas contas não andam mais**. É o mesmo buraco do item 4 visto
+  do outro lado: `ClaimBatchAsync` marca `processing` sem lease e nada varre run
+  velho, então `queued` órfão é estado terminal. Um reaper de `research_runs`
+  parados resolve as duas coisas de uma vez.
 
 ---
 
