@@ -1,6 +1,6 @@
 # ADR-0012 — O fit pesa por perfil de operação, e o perfil sai da Receita
 
-**Data:** 2026-09-02 · **Status:** 🟡 **Proposta** — precisa de decisão antes de virar código
+**Data:** 2026-09-02 · **Status:** 🟡 **Proposta** — ICP e faixas **decididos**; pesos e teto de preço em aberto (§6)
 
 ## Contexto
 
@@ -102,79 +102,136 @@ o que mantém o ADR-0005 de pé: a nota continua reproduzível e explicável.
 
 ---
 
-## 4. As hipóteses de dor, por perfil
+## 4. O ICP, decidido
 
-Aqui está o miolo. Cada hipótese diz **o que prevemos**, **o que a torna falsa** e
-**que produto ela sustenta**. São hipóteses: entram no código como pesos, e saem
-se a taxa de conversão não confirmar.
+**Oficina e autopeças ficam fora do fit neste momento** — 623 mil contas, 92% da
+base carregada. Não é descarte: a AutoHous terá produto direcionado a elas, e
+quando tiver, elas voltam com critérios próprios. Até lá, pontuá-las com
+`vitrine` e `volume_de_estoque` produziria nota baixa que parece conta fria e é,
+na verdade, conta não diagnosticada. Elas **continuam na base** — sair do fit não
+é sair do banco.
 
-### H1 — Micro vendedor de veículo (porte 01, 1 CNPJ, MEI/Simples)
-> ~27,6 mil contas
+O ICP do fit passa a ser **venda de veículos (CNAE 4511)**: 38.332 contas.
 
-**Dor prevista:** não tem vitrine própria utilizável; o estoque vive no
-Webmotors/OLX e no Instagram. Republica o mesmo carro à mão em cada canal.
+| | até 3 | 4 a 7 | 8 a 15 | 15+ | total |
+|---|---|---|---|---|---|
+| **Concessionária** (novos) | 9.100 | 436 | 158 | 34 | **9.728** |
+| **Revenda** (usados) | 28.459 | 109 | 24 | 12 | **28.604** |
+
+Três coisas que esta tabela ensina e que mudam o desenho:
+
+**A faixa é discriminante para concessionária e quase inútil para revenda.** 628
+concessionárias têm 4+ unidades; entre as revendas são 145. Se o peso variasse só
+por unidade, 99,5% das revendas cairiam na mesma célula — a segmentação não
+segmentaria nada justamente onde está o grosso do funil.
+
+**Unidade sozinha subestima porte.** 2.402 concessionárias de "até 3 unidades" já
+são `porte 05`. Uma loja única de marca premium não é operação pequena. A faixa
+precisa ser **unidades × porte**, não unidades.
+
+**A faixa mais alta tem 34 contas.** São quase certamente as de maior valor e
+merecem tratamento — mas construir peso elaborado para 34 contas enquanto 28.459
+compartilham uma célula é alocar esforço ao contrário.
+
+### 4.1 De onde sai a contagem de unidades
+
+**Não de `StoreCount`.** Aquele campo é autodeclarado pelo Researcher e vem nulo
+com frequência. A contagem sai de `companies_cnpj`: uma linha por
+estabelecimento, agrupada por conta pelo account graph — que é exatamente o que
+"olhar para os grupos" exige, porque a faixa vale para o **grupo**, e não para o
+CNPJ isolado.
+
+Onde as duas contagens divergirem de forma material, isso **não é empate a
+resolver**: é sinal de que o agrupamento falhou, e a conta pertence à fila de
+revisão de merge. O `StoreCount` do agente vira corroboração, não fonte.
+
+## 4.2 As hipóteses de dor
+
+**Natureza decide o que se APLICA. Porte × unidades decide o PESO.** Cada
+hipótese diz o que prevê, o que a refuta e o produto que sustenta. São hipóteses:
+entram como pesos e saem se a conversão não confirmar.
+
+### H1 — Revenda de usados, até 3 unidades
+> 28.459 contas — **74% do ICP**
+
+**Dor prevista:** não tem vitrine própria utilizável. O estoque vive no
+Webmotors/OLX e no Instagram, e o mesmo carro é republicado à mão em cada canal.
 **Preço é a objeção antes de qualquer argumento técnico.**
 
-**Sustenta:** FrontCar em nível de entrada. **Nunca BoxTech** — capital mediano de
-R$ 6.500 não compra plataforma.
-**Refuta se:** a conta já tem site com vitrine e tracking funcionando.
-**Peso proposto:** `vitrine` e `achabilidade` sobem; `unidades`, `grupo_economico`
-e `integracao_complexa` **saem da conta** (não valem zero — não se aplicam).
+**Sustenta:** FrontCar em nível de entrada. **Nunca BoxTech.**
+**Refuta se:** já tem site com vitrine e tracking funcionando.
+**Pesos:** `vitrine` e `achabilidade` sobem; `unidades`, `grupo_economico` e
+`heterogeneidade` **não se aplicam** — e não se aplicar é diferente de valer zero.
 
-### H2 — Revenda estabelecida (porte 03, 1–2 CNPJs)
-> ~7,5 mil contas
+> **Correção de uma hipótese anterior:** a primeira versão desta ADR falava em
+> MEI. Está errado para venda de veículos — há **3 MEIs** em todo o CNAE 4511,
+> porque o MEI é legalmente vedado ao comércio de veículos. O micro vendedor aqui
+> é `porte 01` no Simples, não MEI. O teto de preço continua valendo; a variável
+> que o define é `porte` e `capital_social`, não o regime MEI.
 
-**Dor prevista:** tem site, tem volume, e começa a perder lead por falta de
-processo. O estoque em 2–3 canais já dá retrabalho, mas ainda é administrável.
-**Sustenta:** FrontCar (qualidade) e AutoFollow (CRM) — nesta ordem.
-**Refuta se:** já opera CRM detectável e o lead não vaza.
-**Peso proposto:** `captura_sem_destino` e `conversao` sobem; `unidades` continua
-baixo.
+### H2 — Revenda com estrutura, 4+ unidades
+> 145 contas
 
-### H3 — Concessionária de marca, médio/grande (porte 05, 4511, filiais)
-> ~11,5 mil contas
+**Dor prevista:** o volume já dá retrabalho e o lead vaza por falta de processo.
+Poucas contas, mas cada uma vale várias da H1.
+**Sustenta:** FrontCar e AutoFollow; MotorHub a partir de 8 unidades.
+**Refuta se:** já opera CRM detectável.
 
-**Dor prevista:** a qualidade do site é **custo de mídia**. Carregamento lento e
-CTA fraco elevam CPA/CPL, e isso aparece no orçamento de campanha antes de
-aparecer em qualquer outro lugar. E a **falta de integração é a dor maior**: DMS
-da marca, sistema da fábrica, múltiplos portais, múltiplas unidades — cada
-alteração feita N vezes.
-**Sustenta:** MotorHub como entrada; FrontCar com argumento **econômico** (CPA/CPL),
-não estético; BoxTech como consolidação.
+### H3 — Concessionária pequena, tier 1 (até 3 unidades)
+> 9.100 contas — 2.402 já são `porte 05`
+
+**Dor prevista:** tem site — geralmente o template da fábrica — e não controla a
+vitrine. Sofre exigência de marca sem ferramenta própria. Nas 2.402 de porte 05,
+a operação é grande dentro de poucas paredes: volume de campanha e estoque que
+não cabem no template.
+**Sustenta:** FrontCar. AutoFollow quando há mídia paga detectada.
+**Refuta se:** a fábrica fornece plataforma que a concessionária considera
+suficiente.
+**Pesos:** `unidades` continua baixo; **`porte` compensa** — é aqui que a correção
+"unidades × porte" mais importa.
+
+### H4 — Concessionária pequena, tier 2 (4 a 7 unidades)
+> 436 contas — 388 são `porte 05`
+
+**Dor prevista:** a coordenação começa a doer antes do volume. Mesmo estoque em
+site próprio, portal da marca e marketplaces; preço divergente entre unidades.
+**Sustenta:** MotorHub entra na conversa; FrontCar com argumento de consistência.
+**Refuta se:** as unidades já operam catálogo unificado.
+
+### H5 — Concessionária média (8 a 15 unidades)
+> 158 contas — 154 são `porte 05`
+
+**Dor prevista:** o site é **custo de mídia**. Carregamento lento e CTA fraco
+elevam CPA e CPL, e isso aparece no orçamento de campanha antes de aparecer em
+qualquer outro lugar. A falta de integração já é a dor maior: DMS da marca,
+sistema da fábrica, N portais, N unidades — cada alteração feita N vezes.
+**Sustenta:** MotorHub como entrada; FrontCar com argumento **econômico**
+(CPA/CPL), não estético.
 **Refuta se:** já tem integrador e o estoque bate entre canais.
-**Peso proposto:** `canais_externos`, `heterogeneidade` e `dms` sobem muito;
-`desempenho` deixa de ser nota de site e passa a ser **argumento de custo**.
 
-### H4 — Grupo multimarca com 3+ CNPJs
-> ~4,9 mil contas
+### H6 — Concessionária média/grande (15+ unidades)
+> 34 contas — todas `porte 05`
 
-**Dor prevista:** a dor não é volume, é **coerência**. Preço divergente entre
-unidades, estoque publicado em datas diferentes, marca inconsistente.
+**Dor prevista:** a da H5 elevada, mais **governança**: marca inconsistente entre
+unidades, publicação em datas diferentes, nenhuma visão consolidada.
+**Sustenta:** BoxTech como consolidação; MotorHub como porta.
+**Refuta se:** já roda plataforma corporativa.
+
+### H7 — Grupo — transversal às faixas
+> 773 contas com 4+ unidades
+
+Não é faixa: é **condição que atravessa H2 a H6**. A dor do grupo não é volume, é
+**coerência** — preço divergente entre unidades, estoque publicado em datas
+diferentes, marca inconsistente. Multiplica quando há mais de uma marca ou mais
+de um município.
 **Sustenta:** MotorHub e BoxTech.
-**Refuta se:** as unidades operam de forma independente por decisão, e não por
-limitação.
-**Peso proposto:** nº de CNPJs e dispersão geográfica passam a valer de verdade.
+**Refuta se:** as unidades operam independentes por decisão, e não por limitação.
+**Pesos:** dispersão geográfica e contagem de marcas passam a valer de verdade.
 
-### H5 — Oficina e autopeças (4520, 453)
-> ~623 mil contas — **o grosso da base**
-
-**Dor prevista:** não é distribuição de estoque. É **ser encontrada** (busca
-local, Google Meu Negócio) e **agendar** — que é conversão de outro tipo.
-**Sustenta:** FrontCar em recorte de presença local. **Nenhum dos outros quatro.**
-**Refuta se:** o volume de serviço não depende de canal digital.
-**Peso proposto:** os critérios de estoque **não se aplicam**; entram
-achabilidade local e densidade de concorrência do município.
-
-> **H5 é a que tem mais consequência e menos evidência.** Se ela se confirmar,
-> 92% da base precisa de um recorte de produto que hoje não existe. Se não se
-> confirmar, essas 623 mil contas deveriam sair do ICP — e a fila fica honesta.
-
-### H6 — Empresa nova (`data_abertura` < 24 meses)
-**Dor prevista:** ainda não tem site nem processo; compra o básico e tem urgência.
-**Sustenta:** FrontCar.
-**Refuta se:** abertura recente for só reorganização societária de operação antiga.
-
----
+### H8 — Empresa nova (`data_abertura` < 24 meses)
+Transversal. Ainda não tem site nem processo; compra o básico e tem urgência.
+**Refuta se:** a abertura recente for reorganização societária de operação antiga
+— e `capital_social` alto com abertura recente é exatamente esse caso.
 
 ## 5. Mecanismo proposto
 
@@ -193,14 +250,16 @@ achabilidade local e densidade de concorrência do município.
 
 ## 6. Perguntas abertas — preciso de decisão
 
-1. **H5 (oficina/autopeças) entra ou sai?** São 623 mil contas, 92% da base. Se
-   entram, falta produto; se saem, o funil encolhe para ~50 mil e fica honesto.
-   **É a decisão de maior impacto deste documento.**
+1. ~~H5 (oficina/autopeças) entra ou sai?~~ **DECIDIDO: ficam fora por ora**, com
+   produto direcionado a caminho. Ver §4.
 2. **Qual o teto de produto por faixa?** Preciso da regra "MEI não recebe X;
    porte 03 não recebe Y" — ou do preço de cada produto para eu derivá-la.
 3. **O argumento do FrontCar muda por porte?** Em H3 ele é CPA/CPL; em H1 é "não
    ter vitrine". Se sim, o prompt do A04 precisa receber o perfil.
 4. **`data_abertura` e densidade de município entram na v1 ou ficam para depois?**
+5. **A revenda de usados precisa de um segundo eixo.** Unidades não separa 99,5%
+   delas. O candidato natural é `porte` + `capital_social`; falta decidir se basta
+   ou se é preciso um sinal de operação (estoque estimado, mídia paga detectada).
 
 ---
 
@@ -221,7 +280,9 @@ saem depois, e mudam sem novo ADR.
 
 ## Gatilho de revisão
 
-Reabrir quando: (a) o AutoTalk ficar pronto e voltar à disputa; (b) houver
+Reabrir quando: (a) **o produto para oficina e autopeças existir** — 623 mil
+contas voltam ao fit com critérios próprios; (b) o AutoTalk ficar pronto e voltar
+à disputa; (c) houver
 conversão real de 30+ contas por perfil para calibrar contra resultado em vez de
-hipótese; (c) o catálogo ganhar produto para serviço (H5); (d) a base deixar de
-ser dominada por oficinas — hoje 445 mil de 712 mil.
+hipótese — o que para a H6 (34 contas) levará tempo e talvez nunca chegue a 30,
+caso em que a hipótese se decide por julgamento comercial, e não por número.
