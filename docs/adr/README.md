@@ -18,6 +18,7 @@ revisão**, que é o campo que impede um ADR de virar dogma.
 | [0010](0010-plataforma-decide-agente-argumenta.md) | A plataforma decide o produto; o agente argumenta | Aceito |
 | [0011](0011-orchestrator-decide-por-estado.md) | Orchestrator decide por estado; dispatcher só roteia comando | Aceito |
 | [0012](0012-fit-por-perfil-de-operacao.md) | O fit pesa por perfil de operação, e o perfil sai da Receita | 🟡 Proposta |
+| [0013](0013-severidade-sai-da-populacao.md) | A severidade de um achado sai da população, não da opinião | Aceito |
 
 Decisões anteriores a este diretório estão descritas em prosa em
 [architecture.md](../architecture.md) e [data-model.md](../data-model.md).
