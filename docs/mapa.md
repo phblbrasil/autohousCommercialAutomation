@@ -104,6 +104,7 @@ o link aponta. Ler antes de escrever consulta nova economiza a redescoberta.
 | **`--nologo` no `dotnet test`** | "Zero tests ran", código 5 | [CLAUDE.md](../CLAUDE.md) |
 | **`.env` com CRLF** | `400` com corpo vazio em toda chamada | [runbook](hermes-runbook.md) |
 | **Smart App Control** | `An Application Control policy has blocked this file` | [HANDOFF §3](../HANDOFF.md) |
+| **Regex sobre HTML** | `h1` em comentário contava como `h1`; menção a `ld+json` em texto marcava dado estruturado | resolvido: sonda usa AngleSharp |
 
 O padrão que se repete: **defeito invisível na escala ou no ambiente em que o
 código foi escrito, dominante naquele em que ele roda.** Fixture esconde fuso;
@@ -170,6 +171,7 @@ entrou, e por quê?" sem `git log`.
 | 02/09 | Fit por perfil de operação | ICP decidido (venda de veículos, 38.332 contas; oficina/autopeças fora por ora), faixas por unidades × porte, 8 hipóteses de dor | [ADR-0012](adr/0012-fit-por-perfil-de-operacao.md) |
 | 02/09 | Sonda de site coberta | projeto de teste que não existia; fixa o comportamento atual **e dois defeitos do regex**, antes de trocar o motor de parse | [HttpWebsiteProbeTests](../tests/AutoHous.Revenue.WebAudit.Tests/HttpWebsiteProbeTests.cs) |
 | 02/09 | Parser de HTML real | regex → AngleSharp na sonda; os dois defeitos fixados quebraram e viraram correção, os outros 7 testes passaram intactos | [HttpWebsiteProbe](../src/AutoHous.Revenue.WebAudit/HttpWebsiteProbe.cs) |
+| 02/09 | Auditoria profunda (AEO/GEO) | 19 medidas novas: robôs de IA bloqueados, `llms.txt`, indexabilidade, texto sem JS, tipos de JSON-LD, NAP, imagens, canonical, HSTS | migration `0018`, [ProbeDeepAuditTests](../tests/AutoHous.Revenue.WebAudit.Tests/ProbeDeepAuditTests.cs) |
 
 **Como manter:** ao mergear uma fatia, acrescente uma linha aqui e atualize o
 HANDOFF. As duas coisas juntas são o que faz a próxima sessão começar sabendo.
