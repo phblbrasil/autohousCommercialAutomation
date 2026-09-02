@@ -18,7 +18,7 @@
 
 | | |
 |---|---|
-| Testes | **550/550** verdes |
+| Testes | **555/555** verdes |
 | Migrations aplicadas no banco de dev | **17** de 17 — em dia |
 | Carga da Receita `2026-08` | ✅ **concluída** |
 | Website Auditor (A03) | ✅ fatia completa, testada ponta a ponta |
@@ -217,11 +217,14 @@ rodado. Depois de aplicada, a mesma correção custaria uma `0018`.
   reproduzida em quatro tentativas seguintes, teste não identificado.
   `OutboxConcurrencyTests` é o suspeito natural. Não é do diff da revisão — o
   vermelho apareceu numa build cujas mudanças as verdes seguintes também tinham.
-- **`ProductFitPersister` não tem teste de integração.** Nenhum SQL dele toca um
-  Postgres real na suíte. Foi por isso que o horizonte do desqualificador é `int`
-  de dias multiplicado por `interval '1 day'`, e não `TimeSpan`: não quis apoiar
-  em inferência de tipo do Npgsql o que nenhum teste pegaria. `WebsiteAuditSliceTests`
-  é o molde pronto para pagar isso.
+- ~~**`ProductFitPersister` não tem teste de integração.**~~ **Pago em 02/09.**
+  `ProductFitSliceTests` cobre as duas fatias contra um Postgres com as migrations
+  aplicadas: a FK de `agent_run_id` nos dois persisters, a separação entre
+  aritmética e argumento em `reasons`, o lastro em `product_fit_evidence`, o prazo
+  e a substituição do desqualificador, a persona da plataforma ao lado da do
+  agente, o `claim_scope` por canal e a idempotência da segunda busca.
+  Verificado que os testes **reprovam** de verdade: revertendo a ordem de escrita,
+  3 dos 5 quebram.
 - **`v_account_current_fit` é `select *` congelado na 0009** — não expõe
   `coverage`, `pitch_confidence` nem `account_score_id`, que a `0017` acrescentou.
   Funciona hoje porque `GetCurrentAsync` só lê colunas antigas; é armadilha para a
