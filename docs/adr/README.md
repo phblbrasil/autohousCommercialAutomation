@@ -17,6 +17,7 @@ revisão**, que é o campo que impede um ADR de virar dogma.
 | [0009](0009-credencial-de-borda-da-revenue-api.md) | Credencial de borda da Revenue API | Aceito |
 | [0010](0010-plataforma-decide-agente-argumenta.md) | A plataforma decide o produto; o agente argumenta | Aceito |
 | [0011](0011-orchestrator-decide-por-estado.md) | Orchestrator decide por estado; dispatcher só roteia comando | Aceito |
+| [0012](0012-fit-por-perfil-de-operacao.md) | O fit pesa por perfil de operação, e o perfil sai da Receita | 🟡 Proposta |
 
 Decisões anteriores a este diretório estão descritas em prosa em
 [architecture.md](../architecture.md) e [data-model.md](../data-model.md).
