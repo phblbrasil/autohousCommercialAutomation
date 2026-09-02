@@ -53,12 +53,24 @@ public sealed class WebsiteAuditPersister(
                  performance_score, seo_score, ux_score, mobile_score,
                  conversion_score, inventory_score, tracking_score,
                  multiple_portals, complex_integration, portal_count,
+                 ai_crawlers_blocked, ai_search_crawlers_blocked, has_llms_txt,
+                 is_indexable, raw_text_words,
+                 structured_data_types, structured_data_has_nap, h1_count, h2_count,
+                 title_length, meta_description_length, canonical_self_referencing,
+                 image_count, images_with_alt, images_with_dimensions, images_modern_format,
+                 has_hsts, internal_link_count, declared_language,
                  issues, strengths, probe, research_run_id, agent_run_id, audited_at)
             values
                 (@Id, @AccountId, @Url, @FinalUrl, @Status,
                  @Performance, @Seo, @Ux, @Mobile,
                  @Conversion, @Inventory, @Tracking,
                  @MultiplePortals, @ComplexIntegration, @PortalCount,
+                 @AiCrawlersBlocked, @AiSearchCrawlersBlocked, @HasLlmsTxt,
+                 @IsIndexable, @RawTextWords,
+                 @StructuredDataTypes, @StructuredDataHasNap, @H1Count, @H2Count,
+                 @TitleLength, @MetaDescriptionLength, @CanonicalSelfReferencing,
+                 @ImageCount, @ImagesWithAlt, @ImagesWithDimensions, @ImagesModernFormat,
+                 @HasHsts, @InternalLinkCount, @DeclaredLanguage,
                  @Issues::jsonb, @Strengths::jsonb, @Probe::jsonb,
                  @ResearchRunId, @AgentRunId, @AuditedAt)
             """,
@@ -82,6 +94,38 @@ public sealed class WebsiteAuditPersister(
                 // Nulo quando o agente nao rodou - site fora do ar nao observou
                 // canal externo nenhum, e gravar 0 afirmaria que nao ha.
                 PortalCount = profile?.Portals.Count,
+
+                // ------------------------------------ GEO, AEO e qualidade
+                // Tudo medido pela sonda. Nulo atravessa: "nao consegui medir"
+                // e diferente de "medi zero", e o scoring depende da distincao.
+                //
+                // O array vai como string[] e nao como jsonb: o Npgsql mapeia
+                // text[] direto, e guardar uma lista de user-agents em jsonb
+                // pediria cast em toda consulta que quisesse filtrar por um
+                // agente especifico - que e justamente a consulta da fila.
+                AiCrawlersBlocked = request.Probe.AiCrawlersBlocked?.ToArray(),
+                AiSearchCrawlersBlocked = request.Probe.AiCrawlersBlocked is null
+                    ? (int?)null
+                    : AiCrawlers.CountSearch(request.Probe.AiCrawlersBlocked),
+                request.Probe.HasLlmsTxt,
+                request.Probe.IsIndexable,
+                request.Probe.RawTextWords,
+
+                StructuredDataTypes = request.Probe.StructuredDataTypes?.ToArray(),
+                request.Probe.StructuredDataHasNap,
+                request.Probe.H1Count,
+                request.Probe.H2Count,
+
+                request.Probe.TitleLength,
+                request.Probe.MetaDescriptionLength,
+                CanonicalSelfReferencing = request.Probe.CanonicalIsSelfReferencing,
+                request.Probe.ImageCount,
+                request.Probe.ImagesWithAlt,
+                request.Probe.ImagesWithDimensions,
+                request.Probe.ImagesModernFormat,
+                request.Probe.HasHsts,
+                request.Probe.InternalLinkCount,
+                request.Probe.DeclaredLanguage,
                 Issues = JsonSerializer.Serialize(profile?.Issues ?? [], ProbeJson),
                 Strengths = JsonSerializer.Serialize(profile?.Strengths ?? [], ProbeJson),
                 Probe = JsonSerializer.Serialize(request.Probe, ProbeJson),

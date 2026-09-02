@@ -72,7 +72,29 @@ public class WebsiteAuditSliceTests : IAsyncLifetime
                     Match = "wa.me/"
                 }
             ],
-            ObservedAt = DateTimeOffset.UtcNow
+            ObservedAt = DateTimeOffset.UtcNow,
+
+            // Medidas da auditoria profunda (0018). O robots.txt desta loja
+            // bloqueia dois agentes, e só um deles responde a pergunta do
+            // comprador agora — a distinção que separa alarme de diagnóstico.
+            AiCrawlersBlocked = ["GPTBot", "OAI-SearchBot"],
+            HasLlmsTxt = false,
+            IsIndexable = true,
+            RawTextWords = 420,
+            StructuredDataTypes = ["AutoDealer", "Offer", "Vehicle"],
+            StructuredDataHasNap = true,
+            H1Count = 1,
+            H2Count = 6,
+            TitleLength = 58,
+            MetaDescriptionLength = 149,
+            CanonicalIsSelfReferencing = true,
+            ImageCount = 24,
+            ImagesWithAlt = 20,
+            ImagesWithDimensions = 4,
+            ImagesModernFormat = 0,
+            HasHsts = true,
+            InternalLinkCount = 37,
+            DeclaredLanguage = "pt-BR"
         };
     }
 
@@ -195,6 +217,70 @@ public class WebsiteAuditSliceTests : IAsyncLifetime
 
         Assert.Equal(2, probeTech);
         Assert.Equal(3, agentTech);
+    }
+
+    /// <summary>
+    /// As medidas de AEO e GEO chegam ao banco, e o array sobrevive à ida e
+    /// volta pelo Npgsql.
+    ///
+    /// O achado que este teste protege é o mais acionável da auditoria: a loja
+    /// bloqueia dois robôs de IA, e **um deles responde a pergunta do comprador
+    /// agora**. `ai_search_crawlers_blocked` é derivado na escrita porque a
+    /// classificação de cada agente vive no código, não no banco — recalcular na
+    /// consulta exigiria duplicar a taxonomia em SQL.
+    /// </summary>
+    [Fact]
+    public async Task Medidas_de_aeo_e_geo_sao_persistidas()
+    {
+        var (accountId, _, _) = await ArrangeAsync();
+
+        await Get<OutboxDispatcher>().DrainOnceAsync(TestContext.Current.CancellationToken);
+
+        var deep = await QuerySingleAsync<DeepRow>("""
+            select ai_crawlers_blocked          as AiBlocked,
+                   ai_search_crawlers_blocked   as AiSearchBlocked,
+                   is_indexable                 as IsIndexable,
+                   raw_text_words               as RawTextWords,
+                   structured_data_types        as Types,
+                   structured_data_has_nap      as HasNap,
+                   images_with_dimensions       as ImagesWithDimensions,
+                   image_count                  as ImageCount,
+                   declared_language            as Lang
+              from website_audits where account_id = @Id
+            """, new { Id = accountId });
+
+        Assert.Equal(["GPTBot", "OAI-SearchBot"], deep.AiBlocked);
+
+        // Dois bloqueados, um de busca. O número que vira argumento comercial.
+        Assert.Equal(1, deep.AiSearchBlocked);
+
+        Assert.True(deep.IsIndexable);
+        Assert.Equal(420, deep.RawTextWords);
+
+        // Vehicle e Offer juntos: o estoque é citável por um motor de resposta.
+        Assert.Contains("Vehicle", deep.Types!);
+        Assert.Contains("Offer", deep.Types!);
+        Assert.True(deep.HasNap);
+
+        // 4 de 24 imagens com dimensão declarada — o proxy de CLS que dá para
+        // medir sem navegador.
+        Assert.Equal(24, deep.ImageCount);
+        Assert.Equal(4, deep.ImagesWithDimensions);
+
+        Assert.Equal("pt-BR", deep.Lang);
+    }
+
+    private sealed record DeepRow
+    {
+        public string[]? AiBlocked { get; init; }
+        public int? AiSearchBlocked { get; init; }
+        public bool? IsIndexable { get; init; }
+        public int? RawTextWords { get; init; }
+        public string[]? Types { get; init; }
+        public bool? HasNap { get; init; }
+        public int? ImagesWithDimensions { get; init; }
+        public int? ImageCount { get; init; }
+        public string? Lang { get; init; }
     }
 
     /// <summary>

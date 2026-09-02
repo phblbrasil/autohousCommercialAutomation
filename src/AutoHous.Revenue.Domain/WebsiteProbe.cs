@@ -74,6 +74,125 @@ public sealed record WebsiteProbeResult
     /// <summary>Largura fixa em px no viewport - o oposto de responsivo.</summary>
     public bool? HasFixedWidthViewport { get; init; }
 
+    // --------------------------------- descoberta por motor generativo (GEO)
+
+    /// <summary>
+    /// Rastreadores de IA que o <c>robots.txt</c> BLOQUEIA.
+    ///
+    /// E a medida mais acionavel desta sonda, e a que ninguem olha. Uma
+    /// concessionaria que bloqueia <c>GPTBot</c> nao existe quando o comprador
+    /// pergunta ao assistente "onde acho um Corolla 2022 em Porto Alegre" - e
+    /// ninguem no negocio sabe, porque o bloqueio quase sempre veio de um
+    /// tutorial de "proteja seu conteudo" aplicado sem consequencia medida.
+    ///
+    /// Lista vazia com <see cref="HasRobotsTxt"/> verdadeiro significa "nenhum
+    /// bloqueado"; nula significa "nao verificado".
+    /// </summary>
+    public IReadOnlyList<string>? AiCrawlersBlocked { get; init; }
+
+    /// <summary>
+    /// <c>/llms.txt</c>: convencao emergente para dizer a um modelo o que o site
+    /// e e onde esta o que importa. Ausencia hoje nao e defeito - e vantagem de
+    /// quem tem.
+    /// </summary>
+    public bool? HasLlmsTxt { get; init; }
+
+    /// <summary>
+    /// O documento se declara indexavel? Falso com <c>noindex</c> em meta robots
+    /// ou no cabecalho <c>X-Robots-Tag</c>.
+    ///
+    /// Raro e vale medir porque o custo do falso negativo e total: um
+    /// <c>noindex</c> esquecido numa migracao zera a aquisicao organica, e o
+    /// sintoma que chega ao negocio e "as vendas cairam", nunca "o site saiu do
+    /// indice".
+    /// </summary>
+    public bool? IsIndexable { get; init; }
+
+    /// <summary>
+    /// Palavras de texto visivel no HTML CRU, sem executar JavaScript.
+    ///
+    /// E o numero que denuncia a vitrine em SPA. O rastreador que nao executa JS
+    /// - a maioria dos de IA - ve exatamente isto. Uma home de concessionaria
+    /// com 40 palavras nao tem "pouco conteudo": ela tem o estoque inteiro atras
+    /// de uma chamada que aquele rastreador nao faz.
+    /// </summary>
+    public int? RawTextWords { get; init; }
+
+    // ---------------------------------------- legibilidade por maquina (AEO)
+
+    /// <summary>
+    /// Tipos declarados em JSON-LD (<c>@type</c>): <c>AutoDealer</c>,
+    /// <c>Vehicle</c>, <c>Offer</c>, <c>FAQPage</c>, <c>LocalBusiness</c>...
+    ///
+    /// E o que <see cref="HasStructuredData"/> nunca conseguiu dizer. "Tem dado
+    /// estruturado" nao distingue um rodape com <c>Organization</c> de uma
+    /// vitrine inteira marcada com <c>Vehicle</c> e <c>Offer</c> - e e a segunda
+    /// que faz o estoque ser citavel por um motor de resposta.
+    /// </summary>
+    public IReadOnlyList<string>? StructuredDataTypes { get; init; }
+
+    /// <summary>
+    /// O dado estruturado carrega nome, endereco e telefone juntos.
+    ///
+    /// E o minimo para um motor de resposta afirmar QUAL negocio e este. Sem
+    /// NAP, a loja pode estar bem escrita e ainda assim ser indistinguivel de
+    /// outra de nome parecido na mesma cidade.
+    /// </summary>
+    public bool? StructuredDataHasNap { get; init; }
+
+    /// <summary>Quantos <c>h1</c>. Mais de um e hierarquia ambigua para quem extrai.</summary>
+    public int? H1Count { get; init; }
+
+    /// <summary>Quantos <c>h2</c>. Zero em pagina longa costuma ser texto sem estrutura.</summary>
+    public int? H2Count { get; init; }
+
+    // ----------------------------------------------- qualidade que ranqueia
+
+    /// <summary>
+    /// Comprimento do <c>title</c>. Presenca ja era medida; comprimento e o que
+    /// diz se ele sobrevive ao corte do resultado de busca.
+    /// </summary>
+    public int? TitleLength { get; init; }
+
+    /// <summary>Comprimento da meta description, pela mesma razao.</summary>
+    public int? MetaDescriptionLength { get; init; }
+
+    /// <summary>
+    /// O canonical aponta para a propria pagina?
+    ///
+    /// Canonical errado e pior que canonical ausente: ausente deixa o buscador
+    /// decidir; apontando para outra URL, ele obedece e tira a pagina do indice.
+    /// </summary>
+    public bool? CanonicalIsSelfReferencing { get; init; }
+
+    /// <summary>Total de <c>img</c> no documento.</summary>
+    public int? ImageCount { get; init; }
+
+    /// <summary>Quantas tem <c>alt</c> nao vazio - acessibilidade e leitura por maquina.</summary>
+    public int? ImagesWithAlt { get; init; }
+
+    /// <summary>
+    /// Quantas declaram largura e altura. E o proxy de CLS que da para medir sem
+    /// navegador: imagem sem dimensao empurra o layout quando carrega, e num
+    /// catalogo de veiculos isso acontece em cada card.
+    /// </summary>
+    public int? ImagesWithDimensions { get; init; }
+
+    /// <summary>
+    /// Quantas usam formato moderno (webp/avif). Numa vitrine, imagem e a maior
+    /// parte do peso, e peso e tempo de carregamento - que vira custo de midia.
+    /// </summary>
+    public int? ImagesModernFormat { get; init; }
+
+    /// <summary>Cabecalho <c>Strict-Transport-Security</c> presente.</summary>
+    public bool? HasHsts { get; init; }
+
+    /// <summary>Links internos - profundidade de navegacao disponivel ao rastreador.</summary>
+    public int? InternalLinkCount { get; init; }
+
+    /// <summary>Idioma declarado em <c>&lt;html lang&gt;</c>.</summary>
+    public string? DeclaredLanguage { get; init; }
+
     // -------------------------------------------------------------- rastreio
 
     /// <summary>
