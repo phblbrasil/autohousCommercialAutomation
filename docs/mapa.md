@@ -168,6 +168,7 @@ entrou, e por quê?" sem `git log`.
 | 02/09 | Cobertura de integração de A04 e A05 | `ProductFitSliceTests` — os dois persisters que não tinham banco real nos testes agora têm | [ProductFitSliceTests](../tests/AutoHous.Revenue.Integration.Tests/ProductFitSliceTests.cs) |
 | 02/09 | AutoTalk fora da oferta | não está pronto para vender e estava ganhando a porta de entrada; continua pontuado, não abre conversa | [ProductCatalog](../src/AutoHous.Revenue.Domain/ProductCatalog.cs) |
 | 02/09 | Fit por perfil de operação | ICP decidido (venda de veículos, 38.332 contas; oficina/autopeças fora por ora), faixas por unidades × porte, 8 hipóteses de dor | [ADR-0012](adr/0012-fit-por-perfil-de-operacao.md) |
+| 02/09 | Sonda de site coberta | projeto de teste que não existia; fixa o comportamento atual **e dois defeitos do regex**, antes de trocar o motor de parse | [HttpWebsiteProbeTests](../tests/AutoHous.Revenue.WebAudit.Tests/HttpWebsiteProbeTests.cs) |
 
 **Como manter:** ao mergear uma fatia, acrescente uma linha aqui e atualize o
 HANDOFF. As duas coisas juntas são o que faz a próxima sessão começar sabendo.
