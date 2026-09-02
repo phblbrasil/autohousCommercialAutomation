@@ -23,7 +23,7 @@ dotnet run --project src/AutoHous.Revenue.Migrator     # aplica as migrations
 ./scripts/test.sh                                      # suíte completa
 ```
 
-> Rode a suíte pelo `scripts/test.sh`, não pelo `dotnet test` cru. São 550
+> Rode a suíte pelo `scripts/test.sh`, não pelo `dotnet test` cru. São 608
 > testes, e o script existe por dois motivos.
 >
 > O primeiro: com o runner Microsoft.Testing.Platform eleito no `global.json`,

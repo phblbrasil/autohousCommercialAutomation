@@ -9,7 +9,7 @@
 
 > Para achar onde fica cada coisa, o índice é o [docs/mapa.md](docs/mapa.md).
 
-**Última atualização:** 01/09/2026
+**Última atualização:** 02/09/2026
 **Branch:** `main` — a `feat/website-auditor-e-carga-receita` foi mergeada (fast-forward)
 
 ---
@@ -18,10 +18,10 @@
 
 | | |
 |---|---|
-| Testes | **555/555** verdes |
-| Migrations aplicadas no banco de dev | **17** de 17 — em dia |
+| Testes | **608/608** verdes |
+| Migrations aplicadas no banco de dev | **20** de 20 — em dia |
 | Carga da Receita `2026-08` | ✅ **concluída** |
-| Website Auditor (A03) | ✅ fatia completa, testada ponta a ponta |
+| Website Auditor (A03) | ✅ completo, com auditoria profunda de AEO/GEO |
 | Orchestrator (A01), Product Matcher (A04), People Finder (A05) | ✅ revisados, seis defeitos corrigidos — ver §5 |
 | Hermes: credencial, gateway, MCP | ✅ verificados — ver §6 |
 | Hermes real (`AGENT_RUNTIME=hermes`) | ❌ nunca executou — a chave ainda não foi virada |
@@ -88,7 +88,7 @@ localizar os módulos e não iniciar nenhum, reportando "Zero tests ran" com có
 
 ---
 
-## 4. O que foi entregue nesta sessão
+## 4. O que foi entregue em 31/08 e 01/09
 
 ### 4.1 Website Auditor (A03) — completo
 
@@ -245,6 +245,63 @@ rodado. Depois de aplicada, a mesma correção custaria uma `0018`.
 
 ---
 
+## 5b. A sessão de 02/09 — auditoria profunda e calibração
+
+Cinco fatias, cada uma em sua branch, todas mergeadas na `main`.
+
+**AutoTalk fora da oferta.** Ele estava **vencendo a porta de entrada** (82,62 na
+conta do ensaio) sem estar pronto para vender — o SDR abriria conversa sobre
+produto que não existe. `ProductDefinition.Available` separa "existe no catálogo"
+de "pode ser ofertado hoje". A nota continua sendo calculada: apagar o produto
+apagaria junto a resposta para "quantas contas esperavam por isso?".
+
+**A sonda passou a ler HTML de verdade** (regex → AngleSharp). A prova de que a
+troca foi limpa: os dois testes marcados `DEFEITO` quebraram — que era o objetivo
+— e os outros sete passaram intactos. `<h1>` em comentário HTML contava como
+título; a palavra `application/ld+json` num comentário marcava a página como
+tendo dado estruturado.
+
+**Auditoria profunda (migration `0018`, 19 medidas).** GEO: rastreadores de IA
+bloqueados no `robots.txt`, `llms.txt`, indexabilidade (meta **e** cabeçalho
+`X-Robots-Tag`), texto visível sem JavaScript. AEO: tipos de JSON-LD, inclusive
+aninhados em `@graph`, e NAP. Qualidade: comprimentos, canonical auto-referente,
+imagens por `alt`/dimensão/formato.
+
+**Calibração por população ([ADR-0013](docs/adr/0013-severidade-sai-da-populacao.md),
+migrations `0019` e `0020`).** A severidade de um achado passa a sair do percentil
+do segmento, e não de constante inventada — o ADR-0012 pedia peso por perfil, e a
+força bruta daria ~180 constantes que ninguém defende nem mantém.
+
+**O achado que destravou isso:** nenhuma das 38.332 contas do ICP tem domínio, mas
+a Receita traz `email` — **14.307 domínios candidatos de graça**, e a sonda é HTTP
+puro. O comando `calibrar` no Ingestor sonda uma amostra estratificada e grava a
+distribuição em `probe_samples`.
+
+**Cobertura que não existia:** `HttpWebsiteProbe` não tinha nenhum teste — não
+havia projeto de teste para o `WebAudit`, e a única peça que lê HTML de verdade
+era a única descoberta. Hoje tem 31 testes.
+
+### O que a primeira calibração real mostrou
+
+12 domínios, 7 alcançados. `n` baixo demais para conclusão — o propósito era
+provar o caminho, e ele funciona ponta a ponta contra sites reais. O mecanismo
+disparou: **1 de 3 concessionárias porte 05 bloqueando busca de IA**, e uma com
+TTFB de 4,6 s.
+
+### O que fica pendente desta frente
+
+- **As medidas novas ainda não são pontuadas.** `WebsiteAuditScoring` continua com
+  as sete notas antigas; as 19 medidas estão medidas e persistidas, e nada as
+  transforma em nota. É a próxima fatia, e ela depende da decisão de peso do
+  ADR-0012 (§6 daquele documento).
+- **`ProductFitScoring` ainda não usa a Receita.** Continua decidindo porte por
+  `StoreCount` e `InventoryEstimate`, que o agente autodeclara, enquanto `porte`,
+  `capital_social` e `cnae_principal` estão no banco para 100% da base. É o
+  ADR-0012 esperando implementação.
+- **Uma calibração de verdade** ainda não rodou: a amostra atual tem 12 domínios.
+
+---
+
 ## 6. Hermes: o que já está pronto
 
 **Os três primeiros passos do handoff anterior já estavam feitos** — ele estava
@@ -300,16 +357,20 @@ base real**, nem em fixture. É a mesma lacuna da §5, vista de outro ângulo.
 
 ## 7. Próximos passos, em ordem
 
-1. **Exercitar A04 e A05 em fixture.** Precisa de uma conta que pontue ≥ 50 — o
-   fixture do researcher sempre devolve o mesmo perfil frio. Sem isso, virar a
-   chave leva dois persisters não testados direto para produção.
-2. **Virar `AGENT_RUNTIME=hermes`** e fazer o primeiro run real. O que se olha
+1. ~~Exercitar A04 e A05 em fixture.~~ **Feito em 01/09** — a cadeia completa
+   fecha até `ready`, e o ensaio achou a FK de `agent_run_id`.
+2. **Rodar uma calibração de verdade** (`calibrar --por-estrato 40`) e usar a
+   distribuição para pontuar as medidas de AEO/GEO. Precisa antes da decisão de
+   peso do [ADR-0012 §6](docs/adr/0012-fit-por-perfil-de-operacao.md).
+3. **Implementar o `OperationProfile`** do ADR-0012: o fit passa a ler porte e
+   CNAE da Receita em vez do que o agente autodeclarou.
+4. **Virar `AGENT_RUNTIME=hermes`** e fazer o primeiro run real. O que se olha
    primeiro é `agent_runs`: se todo run falhar como `contract_violation`, veja o
    transporte antes do prompt (§4.2).
-3. **Validar `docker build -f deploy/Dockerfile.hermes`** — nunca foi construído.
-4. **Olhar o quality gate de 82,2%** — 126 mil linhas em revisão é muito.
-5. **Pagar a cobertura de integração do `ProductFitPersister`** e caçar o teste
-   intermitente da §5.
+5. **Validar `docker build -f deploy/Dockerfile.hermes`** — nunca foi construído.
+6. **Olhar o quality gate de 82,2%** — 126 mil linhas em revisão é muito.
+7. ~~Pagar a cobertura de integração do `ProductFitPersister`.~~ **Feito em 02/09.**
+   Fica só o teste intermitente da §5, ainda não reproduzido.
 
 ---
 
