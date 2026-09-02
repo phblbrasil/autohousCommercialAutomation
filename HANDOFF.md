@@ -7,6 +7,8 @@
 > **Ao terminar uma sessão de trabalho, atualize-o.** Um handoff desatualizado é
 > pior que nenhum — ele faz a próxima pessoa confiar em algo que já mudou.
 
+> Para achar onde fica cada coisa, o índice é o [docs/mapa.md](docs/mapa.md).
+
 **Última atualização:** 01/09/2026
 **Branch:** `main` — a `feat/website-auditor-e-carga-receita` foi mergeada (fast-forward)
 

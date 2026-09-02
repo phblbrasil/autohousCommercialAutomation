@@ -9,6 +9,9 @@ pesquisada com evidência rastreável e priorizada por score explicável.
 Dados Abertos CNPJ (RFB) → account graph → pesquisa com evidência → Opportunity Score
 ```
 
+> **Perdido?** [docs/mapa.md](docs/mapa.md) é o índice: diz onde fica cada coisa,
+> quais comandos você vai repetir e quais armadilhas já custaram tempo.
+
 ## Começando
 
 ```bash
@@ -20,7 +23,7 @@ dotnet run --project src/AutoHous.Revenue.Migrator     # aplica as migrations
 ./scripts/test.sh                                      # suíte completa
 ```
 
-> Rode a suíte pelo `scripts/test.sh`, não pelo `dotnet test` cru. São 433
+> Rode a suíte pelo `scripts/test.sh`, não pelo `dotnet test` cru. São 550
 > testes, e o script existe por dois motivos.
 >
 > O primeiro: com o runner Microsoft.Testing.Platform eleito no `global.json`,

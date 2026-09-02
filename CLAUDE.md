@@ -94,6 +94,7 @@ real. O `EvidenceFirstGuard` impõe isso mecanicamente; não contorne.
 | | |
 |---|---|
 | [HANDOFF.md](HANDOFF.md) | onde paramos — **sempre primeiro** |
+| [docs/mapa.md](docs/mapa.md) | onde fica cada coisa — o índice do repositório |
 | [HERMES.md](HERMES.md) | o que o agente pode e não pode fazer |
 | [docs/hermes-runbook.md](docs/hermes-runbook.md) | passo a passo para rodar o Hermes |
 | [docs/agents.md](docs/agents.md) | camada de agentes, transporte, validação |
