@@ -165,6 +165,7 @@ entrou, e por quê?" sem `git log`.
 | 01/09 | Migration `0017` aplicada | `v_account_progress`, `product_fit_evidence`, `contact_evidence`, pisos de confiança | [HANDOFF §1](../HANDOFF.md) |
 | 01/09 | Hermes verificado | credencial, gateway, MCP e allowlist conferidos; `hermes mcp test` quebrado | [HANDOFF §6](../HANDOFF.md) |
 | 01/09 | Ensaio em fixture | cadeia completa até `ready`; achou a FK de `agent_run_id` | [HANDOFF §5](../HANDOFF.md) |
+| 02/09 | Cobertura de integração de A04 e A05 | `ProductFitSliceTests` — os dois persisters que não tinham banco real nos testes agora têm | [ProductFitSliceTests](../tests/AutoHous.Revenue.Integration.Tests/ProductFitSliceTests.cs) |
 
 **Como manter:** ao mergear uma fatia, acrescente uma linha aqui e atualize o
 HANDOFF. As duas coisas juntas são o que faz a próxima sessão começar sabendo.
