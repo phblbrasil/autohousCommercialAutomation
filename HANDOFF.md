@@ -21,7 +21,8 @@
 | Carga da Receita `2026-08` | ✅ **concluída** |
 | Website Auditor (A03) | ✅ fatia completa, testada ponta a ponta |
 | Orchestrator (A01), Product Matcher (A04), People Finder (A05) | ✅ revisados, seis defeitos corrigidos — ver §5 |
-| Hermes real (`AGENT_RUNTIME=hermes`) | ❌ nunca executou — falta credencial de modelo |
+| Hermes: credencial, gateway, MCP | ✅ verificados — ver §6 |
+| Hermes real (`AGENT_RUNTIME=hermes`) | ❌ nunca executou — a chave ainda não foi virada |
 | Railway | ❌ escrito, nunca construído |
 
 ---
@@ -239,24 +240,75 @@ rodado. Depois de aplicada, a mesma correção custaria uma `0018`.
 
 ---
 
-## 6. Próximos passos, em ordem
+## 6. Hermes: o que já está pronto
 
-1. **`hermes setup --portal`** — interativo, a credencial é sua. Sem isso o
-   gateway sobe e todo run falha. Passo a passo em
-   [docs/hermes-runbook.md](docs/hermes-runbook.md).
-2. **`./scripts/hermes-setup.sh`** — `HERMES_API_SERVER_KEY` está vazia no `.env`
-   e o MCP nunca foi publicado.
-3. **Ensaiar com `AGENT_RUNTIME=fixture`** antes de gastar modelo. Se falhar em
-   fixture, o problema não é o Hermes.
-4. **Validar `docker build -f deploy/Dockerfile.hermes`** — nunca foi construído.
-   O layout de instalação veio do `install.sh`, não de um build real.
-5. **Olhar o quality gate de 82,2%** — 126 mil linhas em revisão é muito.
-6. **Pagar a cobertura de integração do `ProductFitPersister`** e caçar o teste
+**Os três primeiros passos do handoff anterior já estavam feitos** — ele estava
+desatualizado. Verificado em 01/09/2026:
+
+| | |
+|---|---|
+| Credencial de modelo | ✅ `hermes doctor` → "Nous Portal auth (logged in)"; modelo `gpt-5.6-luna-900k` via `openai-codex` |
+| `HERMES_API_SERVER_KEY` no `.env` | ✅ 48 chars (não vazia) |
+| MCP publicado em `~/.local/share/autohous/revenue-mcp` | ✅ |
+| `skills.external_dirs` apontando para `hermes/skills/` do repo | ✅ |
+| Gateway em `:8642` | ✅ `{"status":"ok","version":"0.21.0"}` |
+| API em `:5080`, com 401 sem Bearer | ✅ |
+| **Allowlist do MCP** | ✅ exatamente 3 ferramentas de leitura |
+
+**`hermes mcp test autohous_revenue` NÃO funciona — e não é o MCP.** Ele falha
+com `Connection failed: Connection closed` em ~8 s, de qualquer diretório, com
+stdin aberto ou fechado. O servidor está são: rodado direto, faz `initialize` e
+responde `tools/list` com `get_account_context`, `list_account_evidence` e
+`get_product_catalog`. stdout está limpo (os logs vão para stderr), então não é
+corrupção de protocolo.
+
+O runbook manda parar se o `hermes mcp test` listar mais de três ferramentas —
+**mas ele não serve como porteiro aqui**. Use o handshake manual:
+
+```bash
+~/mcp-probe.sh    # initialize + tools/list, JSON-RPC na mão
+```
+
+### Ensaio em fixture — a cadeia do Orchestrator roda
+
+`POST /accounts/{id}/research?force=true` na conta do fixture
+(`grupoventosul.com.br`) encadeou sozinho, tudo `processed`, zero erro:
+
+```
+research.requested → research.completed → score.requested → score.ready → Nurture
+```
+
+E parou no lugar certo, com justificativa no log:
+
+```
+Orchestrator decidiu Score:    fato novo em 2026-09-02 02:19 posterior ao score de 2026-09-01 01:25
+Orchestrator decidiu Nurture:  tier 4: abaixo do corte para produto e contato
+```
+
+**A01 e A03 estão exercitados ponta a ponta. A04 e A05 não, e não dá com este
+fixture:** a conta pontua 41,65, e tier 3 começa em 50. O corte frio do passo 6
+recusa gastar Product Matcher e People Finder nela — comportamento correto, mas
+significa que `ProductFitPersister` e `ContactPersister` **nunca escreveram numa
+base real**, nem em fixture. É a mesma lacuna da §5, vista de outro ângulo.
+
+---
+
+## 7. Próximos passos, em ordem
+
+1. **Exercitar A04 e A05 em fixture.** Precisa de uma conta que pontue ≥ 50 — o
+   fixture do researcher sempre devolve o mesmo perfil frio. Sem isso, virar a
+   chave leva dois persisters não testados direto para produção.
+2. **Virar `AGENT_RUNTIME=hermes`** e fazer o primeiro run real. O que se olha
+   primeiro é `agent_runs`: se todo run falhar como `contract_violation`, veja o
+   transporte antes do prompt (§4.2).
+3. **Validar `docker build -f deploy/Dockerfile.hermes`** — nunca foi construído.
+4. **Olhar o quality gate de 82,2%** — 126 mil linhas em revisão é muito.
+5. **Pagar a cobertura de integração do `ProductFitPersister`** e caçar o teste
    intermitente da §5.
 
 ---
 
-## 7. Decisões que tomamos e não devem ser refeitas sem motivo
+## 8. Decisões que tomamos e não devem ser refeitas sem motivo
 
 - **Índice composto por UF no trigrama: rejeitado.** Parece a otimização óbvia e
   não é. O corte real é ~3,8x (SP concentra 26,6% das contas), e custa **29,3% da
