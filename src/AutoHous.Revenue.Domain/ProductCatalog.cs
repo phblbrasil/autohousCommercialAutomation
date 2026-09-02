@@ -48,9 +48,25 @@ public static class ProductCatalog
             "Follow-up e gestao de leads comerciais",
             ["Diretor Comercial", "Gerente Comercial", "CRM Manager", "BDC Manager"]),
 
+        // AutoTalk continua sendo CALCULADO e nao e ofertado.
+        //
+        // A distincao nao e detalhe. Apagar o produto do catalogo apagaria junto
+        // o diagnostico: quando ele existir, a pergunta "quantas contas tinham
+        // essa dor, e ha quanto tempo?" so tem resposta se a nota tiver sido
+        // gravada esse tempo todo. Mante-lo ofertavel, por outro lado, manda o
+        // SDR abrir conversa sobre algo que a AutoHous nao tem para vender.
+        //
+        // Tambem ha um motivo de MEDICAO para nao deixa-lo disputar a entrada
+        // agora: o criterio que mais o sustenta - `canal_de_conversa` - paga 30
+        // pontos pela AUSENCIA de um widget de chat que a sonda reconheca, e
+        // ausencia e a evidencia mais fraca que existe aqui (a sonda so enxerga
+        // assinatura que ela conhece; um botao de WhatsApp caseiro nao conta).
+        // Com esses pesos ele vencia a porta de entrada em conta grande
+        // independentemente de haver dor de atendimento.
         new(AutoTalk,
             "Atendimento e conversacao com o cliente",
-            ["Diretor Comercial", "CX", "Operacoes", "Atendimento"]),
+            ["Diretor Comercial", "CX", "Operacoes", "Atendimento"],
+            Available: false),
 
         new(BoxTech,
             "Plataforma tecnologica para operacoes maiores",
@@ -71,9 +87,28 @@ public static class ProductCatalog
 
     public static ProductDefinition? Find(string product) =>
         All.FirstOrDefault(p => string.Equals(p.Name, product, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Este produto pode ser OFERTADO hoje?
+    ///
+    /// Separado de <see cref="Sellable"/> porque as duas perguntas são
+    /// diferentes: "isto é produto para a conta prospectada?" e "isto existe
+    /// para vender agora?". O Partner Program falha na primeira; o AutoTalk, na
+    /// segunda. Produto desconhecido devolve <c>false</c> — na dúvida não se
+    /// oferece.
+    /// </summary>
+    public static bool IsAvailable(string product) =>
+        Find(product) is { Available: true };
 }
 
+/// <summary>
+/// <paramref name="Available"/> distingue "existe no catálogo" de "pode ser
+/// oferecido hoje". Um produto indisponível continua sendo pontuado — a nota é o
+/// registro de que a dor existia antes de haver o que vender — mas não abre
+/// conversa nem recebe argumento do agente.
+/// </summary>
 public sealed record ProductDefinition(
     string Name,
     string Solves,
-    IReadOnlyList<string> Personas);
+    IReadOnlyList<string> Personas,
+    bool Available = true);
