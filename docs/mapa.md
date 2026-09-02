@@ -174,6 +174,7 @@ entrou, e por quê?" sem `git log`.
 | 02/09 | Parser de HTML real | regex → AngleSharp na sonda; os dois defeitos fixados quebraram e viraram correção, os outros 7 testes passaram intactos | [HttpWebsiteProbe](../src/AutoHous.Revenue.WebAudit/HttpWebsiteProbe.cs) |
 | 02/09 | Auditoria profunda (AEO/GEO) | 19 medidas novas: robôs de IA bloqueados, `llms.txt`, indexabilidade, texto sem JS, tipos de JSON-LD, NAP, imagens, canonical, HSTS | migration `0018`, [ProbeDeepAuditTests](../tests/AutoHous.Revenue.WebAudit.Tests/ProbeDeepAuditTests.cs) |
 | 02/09 | Calibração por população | severidade sai do percentil do segmento; domínio candidato extraído do e-mail da Receita (14.307 de graça); comando `calibrar` | [ADR-0013](adr/0013-severidade-sai-da-populacao.md), migrations `0019`/`0020` |
+| 02/09 | Varredura da documentação | `data-model` cobre 0018–0020, `architecture` ganha o `WebAudit`, `agents` descreve AEO/GEO e produto indisponível, contagens corrigidas | este arquivo, [HANDOFF §5b](../HANDOFF.md) |
 
 **Como manter:** ao mergear uma fatia, acrescente uma linha aqui e atualize o
 HANDOFF. As duas coisas juntas são o que faz a próxima sessão começar sabendo.

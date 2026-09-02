@@ -31,13 +31,56 @@ implementação "JSON Schema draft 2020-12 via JsonSchema.Net".
 | # | Agente | O que o modelo produz | O que a plataforma **não** delega |
 |---|---|---|---|
 | A02 | Researcher | retrato da empresa, com evidências | nada — é o único cujo output é integralmente do agente |
-| A03 | Website Auditor | o que a página significa para quem vende carro | as sete notas: `WebsiteAuditScoring` sobre a medição da sonda |
-| A04 | Product Matcher | o argumento e a objeção | o fit e a porta de entrada: `ProductFitScoring` (ADR-0005) |
+| A03 | Website Auditor | o que a página significa para quem vende carro | as sete notas, e tudo que a sonda mede — inclusive AEO e GEO (§ abaixo) |
+| A04 | Product Matcher | o argumento e a objeção | o fit, a porta de entrada e **quais produtos podem ser ofertados** |
 | A05 | People Finder | quem decide e por onde é alcançável | a persona (`PersonaCatalog`) e o score de contactabilidade |
 
 A coluna da direita é a que descreve o desenho. Em três dos quatro, o modelo
 produz **fatos e texto**, e a aritmética é da plataforma — pela razão do
 ADR-0005: "por que o MotorHub caiu de 78 para 51?" precisa de resposta auditável.
+
+### A sonda mede fundo, e mede coisas que o modelo não veria
+
+O A03 tem duas metades, e a divisão é a regra central do sistema: a **sonda
+mede**, o **agente observa com evidência**, a **plataforma pontua**. Um modelo de
+linguagem não observa tempo de resposta nem peso de página — ele estima, e
+estimativa travestida de medição vira Technology Pain e sai numa abordagem
+comercial como se fosse fato.
+
+A sonda usa um parser de HTML de verdade (AngleSharp), e não regex. A troca
+aconteceu quando o tipo de pergunta mudou: contar imagem **com** atributo,
+extrair texto visível sem script nem estilo, separar link interno de externo —
+nada disso se resolve com casamento de padrão sobre texto. O motor antigo também
+errava em silêncio: `<h1>` dentro de comentário HTML contava como título.
+
+Três grupos de medida que o auditor produz hoje:
+
+| | pergunta que responde |
+|---|---|
+| **GEO** | o motor generativo consegue **ler** este site? Rastreadores de IA bloqueados no `robots.txt`, `llms.txt`, indexabilidade, e texto visível sem JavaScript |
+| **AEO** | o motor consegue **entender** o que está à venda? Tipos de JSON-LD (`Vehicle`, `Offer`, `AutoDealer`), NAP, hierarquia de títulos |
+| **Qualidade** | o que de fato ranqueia: comprimento de título e descrição, canonical auto-referente, imagens por `alt`/dimensão/formato |
+
+O achado mais acionável do conjunto é o bloqueio de busca de IA, e ele vem com
+uma distinção que o número sozinho não tem: recusar `CCBot` é decisão legítima de
+muita empresa; recusar `OAI-SearchBot` tira a loja do resultado que o comprador
+vê enquanto pergunta onde achar o carro. `AiCrawlers` separa os dois.
+
+**O que a sonda continua não vendo:** tudo que só existe depois do JavaScript
+rodar. Numa vitrine em SPA isso é o estoque inteiro — e é por isso que a contagem
+de veículos é pergunta para o **agente**, e nunca para a sonda.
+
+### Produto indisponível não abre conversa
+
+`ProductDefinition.Available` distingue "existe no catálogo" de "pode ser
+oferecido hoje". Um produto indisponível **continua sendo pontuado** — a nota é o
+registro de que a dor existia antes de haver o que vender —, mas não abre
+conversa nem recebe argumento do agente.
+
+Foi o caso do AutoTalk, que vencia a porta de entrada em conta grande sem estar
+pronto para oferta. Em `MatchProductsUseCase.Worthwhile` o filtro vem **antes** do
+corte relativo: um indisponível com nota alta puxaria o corte para cima e
+derrubaria da lista os produtos que a AutoHous tem para vender.
 
 ### O Product Matcher inverte a ordem
 

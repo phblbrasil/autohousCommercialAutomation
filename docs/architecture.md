@@ -24,6 +24,7 @@ Mcp ----------> (HTTP)  ─────────────> Revenue API
 | `Ingestor` | CLI de captura. Adaptador de entrada + ponto de composição. |
 | `Migrator` | DbUp sobre SQL puro. |
 | `Mcp` | MCP read-only. Fala HTTP; não referencia Npgsql. |
+| `WebAudit` | Sonda de site: HTTP e parse de HTML com AngleSharp. Não referencia Npgsql. |
 
 As direções são impostas por
 [`AutoHous.Revenue.Architecture.Tests`](../tests/AutoHous.Revenue.Architecture.Tests),

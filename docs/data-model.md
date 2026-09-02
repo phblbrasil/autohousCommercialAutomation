@@ -270,3 +270,61 @@ Duas colunas dela merecem nota, porque são o que impede laço no Orchestrator:
 - `contacts_searched_at` responde "já procuramos?", e não "temos contatos?". Uma
   busca que voltou vazia é um resultado; a pergunta errada faria a conta sem
   ninguém localizável refazer a mesma busca para sempre.
+
+
+---
+
+## O que a 0018 acrescentou — a auditoria que o motor de IA lê
+
+A `0015` respondia *"o site está bem feito?"*. Para quem vende carro a pergunta
+virou outra, em duas frentes que aquele conjunto não alcançava.
+
+**GEO — o motor generativo consegue LER?** `ai_crawlers_blocked text[]` guarda os
+rastreadores de IA que o `robots.txt` recusa, e `ai_search_crawlers_blocked`
+conta quantos deles respondem a pergunta do comprador **agora**, em vez de
+coletar para treino futuro. A distinção não é preciosismo: recusar `CCBot` é
+decisão legítima de muita empresa; recusar `OAI-SearchBot` tira a loja do
+resultado que alguém vê enquanto pergunta onde achar o carro — e quase sempre
+ninguém decidiu isso.
+
+Array e não tabela de ligação, ao contrário de `website_audit_evidence`: aqui não
+há integridade referencial a proteger, são nomes de user-agent lidos de um
+arquivo de texto, sem entidade correspondente no banco.
+
+`raw_text_words` é o número que denuncia a vitrine em SPA — texto visível no HTML
+cru, sem executar JavaScript, que é exatamente o que o rastreador vê. Home de
+concessionária com 40 palavras não tem "pouco conteúdo": tem o estoque inteiro
+atrás de uma chamada que aquele rastreador não faz.
+
+**AEO — o motor consegue ENTENDER?** `structured_data_types text[]` substitui na
+prática o booleano `has_structured_data`, que não distinguia um rodapé com
+`Organization` de uma vitrine marcada com `Vehicle` e `Offer` — e é a segunda que
+faz o estoque ser citável. `structured_data_has_nap` verifica nome, endereço e
+telefone juntos: o mínimo para um motor afirmar QUAL negócio é aquele.
+
+**Qualidade.** Comprimento de título e descrição (presença já era medida;
+comprimento diz se sobrevive ao corte do resultado), `canonical_self_referencing`
+— canonical errado é pior que ausente, porque o buscador obedece e tira a página
+do índice —, e as imagens por `alt`, dimensão declarada (o proxy de CLS que dá
+para medir sem navegador) e formato moderno.
+
+## O que a 0019 e a 0020 acrescentaram — a base de calibração
+
+`probe_samples` existe para o [ADR-0013](adr/0013-severidade-sai-da-populacao.md):
+a severidade de um achado sai do percentil do segmento, e não de constante
+inventada. Para isso é preciso conhecer a distribuição do mercado.
+
+**Não é `website_audits`, e a separação é a decisão que importa.** Auditoria
+pertence a uma conta, alimenta Technology Pain e sustenta uma abordagem
+comercial. Amostra de calibração é medição de população sobre um domínio
+**adivinhado** a partir de `companies_cnpj.email` — que pode nem ser o site da
+empresa. Misturar as duas daria à conta uma auditoria que ninguém pediu, com
+domínio não confirmado, e enviesaria a distribuição com as contas que já passaram
+pelo Researcher: justamente as menos representativas, porque foram escolhidas a
+dedo.
+
+`v_probe_distribution` calcula a distribuição por estrato. A `0020` a refez para
+mostrar o **denominador** de cada percentual ao lado do numerador: `avg` ignora
+`NULL`, então site sem `robots.txt` legível sai da conta, e o `n` do estrato não
+era esse subconjunto. Percentual com denominador escondido convida à divisão
+errada — a mesma falha que o ADR-0013 tentava evitar ao exigir `n` visível.
