@@ -3,6 +3,7 @@ using AutoHous.Revenue.Application;
 using AutoHous.Revenue.Infrastructure;
 using AutoHous.Revenue.Ingestor;
 using AutoHous.Revenue.ReceitaFederal;
+using AutoHous.Revenue.WebAudit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -45,6 +46,7 @@ services.AddRevenueUseCases();
 
 ReceitaCommandOptions? receitaOptions = null;
 IngestorOptions? fileOptions = null;
+CalibrarOptions? calibrarOptions = null;
 
 switch (verb)
 {
@@ -63,6 +65,21 @@ switch (verb)
             if (receitaOptions.WorkDir is { Length: > 0 } work) o.WorkDirectory = work;
             o.OfflineOnly = receitaOptions.Offline;
         });
+        break;
+
+    case "calibrar":
+        calibrarOptions = CalibrarOptions.Parse(rest);
+
+        if (calibrarOptions is null)
+        {
+            PrintUsage();
+            return ExitCodes.BadArguments;
+        }
+
+        // A sonda de site so entra no container do Ingestor para este
+        // subcomando: os outros nao saem para a internet, e registrar um
+        // HttpClient que eles nunca usam so aumentaria a superficie.
+        services.AddHttpWebsiteProbe();
         break;
 
     case "arquivo":
@@ -93,6 +110,7 @@ try
     return verb switch
     {
         "receita" => await ReceitaCommand.RunAsync(provider, receitaOptions!, cancellation.Token),
+        "calibrar" => await CalibrarCommand.RunAsync(provider, calibrarOptions!, cancellation.Token),
         _ => await FileIngestCommand.RunAsync(provider, fileOptions!, cancellation.Token)
     };
 }
@@ -117,6 +135,7 @@ static (string? Verb, string[] Arguments) Dispatch(string[] args)
     return args[0] switch
     {
         "receita" => ("receita", args[1..]),
+        "calibrar" => ("calibrar", args[1..]),
         "arquivo" => ("arquivo", args[1..]),
         _ => ("arquivo", args)
     };

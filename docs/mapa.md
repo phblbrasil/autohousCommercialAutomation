@@ -79,6 +79,7 @@ set -a; . ./.env; set +a
 | API (porta 5080) | `dotnet run --project src/AutoHous.Revenue.Api` |
 | worker | `dotnet run --project src/AutoHous.Revenue.Worker` |
 | gateway do Hermes (8642) | `hermes gateway` |
+| calibrar a severidade | `dotnet run --project src/AutoHous.Revenue.Ingestor -- calibrar --por-estrato 40` — HTTP puro, zero de modelo |
 | diagnóstico do Hermes | `hermes doctor` |
 | ferramentas do MCP | **não** use `hermes mcp test` — está quebrado. Ver [HANDOFF §6](../HANDOFF.md) |
 
@@ -172,6 +173,7 @@ entrou, e por quê?" sem `git log`.
 | 02/09 | Sonda de site coberta | projeto de teste que não existia; fixa o comportamento atual **e dois defeitos do regex**, antes de trocar o motor de parse | [HttpWebsiteProbeTests](../tests/AutoHous.Revenue.WebAudit.Tests/HttpWebsiteProbeTests.cs) |
 | 02/09 | Parser de HTML real | regex → AngleSharp na sonda; os dois defeitos fixados quebraram e viraram correção, os outros 7 testes passaram intactos | [HttpWebsiteProbe](../src/AutoHous.Revenue.WebAudit/HttpWebsiteProbe.cs) |
 | 02/09 | Auditoria profunda (AEO/GEO) | 19 medidas novas: robôs de IA bloqueados, `llms.txt`, indexabilidade, texto sem JS, tipos de JSON-LD, NAP, imagens, canonical, HSTS | migration `0018`, [ProbeDeepAuditTests](../tests/AutoHous.Revenue.WebAudit.Tests/ProbeDeepAuditTests.cs) |
+| 02/09 | Calibração por população | severidade sai do percentil do segmento; domínio candidato extraído do e-mail da Receita (14.307 de graça); comando `calibrar` | [ADR-0013](adr/0013-severidade-sai-da-populacao.md), migrations `0019`/`0020` |
 
 **Como manter:** ao mergear uma fatia, acrescente uma linha aqui e atualize o
 HANDOFF. As duas coisas juntas são o que faz a próxima sessão começar sabendo.
