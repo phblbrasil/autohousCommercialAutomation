@@ -1,5 +1,7 @@
 using System.Diagnostics;
-using System.Text.RegularExpressions;
+using AngleSharp.Dom;
+using AngleSharp.Html.Dom;
+using AngleSharp.Html.Parser;
 using AutoHous.Revenue.Application;
 using AutoHous.Revenue.Domain;
 using Microsoft.Extensions.Logging;
@@ -25,12 +27,32 @@ namespace AutoHous.Revenue.WebAudit;
 /// dimensao ausente, e um `false` inventado aqui viraria dor no Technology Pain
 /// de uma conta que talvez nao a tenha.
 /// </summary>
-public sealed partial class HttpWebsiteProbe(
+public sealed class HttpWebsiteProbe(
     HttpClient http,
     IClock clock,
     ILogger<HttpWebsiteProbe>? logger = null) : IWebsiteProbe
 {
-    public string Name => "http-probe-v1";
+    public string Name => "http-probe-v2";
+
+    /// <summary>
+    /// O documento e lido com um parser de HTML de verdade, e nao com regex.
+    ///
+    /// A escolha anterior nao era descuido: enquanto a sonda so respondia
+    /// "existe title?", "existe viewport?", regex bastava. O que fez a conta
+    /// virar foi o tipo de pergunta - contar imagem COM atributo, extrair texto
+    /// visivel sem script nem estilo, separar link interno de externo. Nenhuma
+    /// delas se resolve com casamento de padrao sobre texto.
+    ///
+    /// E o motor antigo ja errava em silencio no que media: `&lt;h1&gt;` dentro
+    /// de comentario HTML contava como titulo, e a palavra
+    /// `application/ld+json` escrita num comentario marcava a pagina como tendo
+    /// dado estruturado. Comentario nao e elemento; para um parser isso nem e
+    /// caso especial.
+    ///
+    /// O custo e um parse de ~10-30 ms por pagina contra um TTFB de centenas de
+    /// milissegundos. E ruido ao lado do I/O.
+    /// </summary>
+    private static readonly HtmlParser Parser = new();
 
     /// <summary>
     /// Teto de leitura do documento. Uma home de concessionaria com 2 MB de HTML
@@ -89,7 +111,6 @@ public sealed partial class HttpWebsiteProbe(
             url, (int)response.StatusCode, ttfb.TotalMilliseconds, bytes);
 
         var finalUri = response.RequestMessage?.RequestUri ?? uri;
-        var head = HeadOf(html);
 
         // Erro do servidor: ha status, e ele ja e a resposta. Nao vale gastar
         // duas requisicoes extras (robots, sitemap) sobre um site quebrado.
@@ -110,6 +131,9 @@ public sealed partial class HttpWebsiteProbe(
 
         var (robots, sitemap) = await ProbeRootFilesAsync(finalUri, ct);
 
+        var doc = Parser.ParseDocument(html);
+        var viewport = Attr(doc, "meta[name=viewport]", "content");
+
         return new WebsiteProbeResult
         {
             RequestedUrl = url,
@@ -119,26 +143,51 @@ public sealed partial class HttpWebsiteProbe(
             TimeToFirstByte = ttfb,
             DocumentLoadTime = loadTime,
             DocumentBytes = bytes,
-            RenderBlockingResources = CountRenderBlocking(head),
+            RenderBlockingResources = CountRenderBlocking(doc),
             CompressionEnabled = response.Content.Headers.ContentEncoding.Count > 0
                                  || response.Headers.Vary.Contains("Accept-Encoding"),
 
             IsHttps = finalUri.Scheme == Uri.UriSchemeHttps,
-            HasTitle = TitleRegex().IsMatch(head),
-            HasMetaDescription = MetaDescriptionRegex().IsMatch(head),
-            HasH1 = H1Regex().IsMatch(html),
-            HasCanonical = CanonicalRegex().IsMatch(head),
-            HasStructuredData = StructuredDataRegex().IsMatch(html),
+
+            // `head > title` e nao `doc.Title`: o segundo acha um <title> de SVG
+            // no corpo da pagina, que nao e titulo de documento nenhum.
+            HasTitle = !string.IsNullOrWhiteSpace(doc.QuerySelector("head > title")?.TextContent),
+            HasMetaDescription = !string.IsNullOrWhiteSpace(Attr(doc, "meta[name=description]", "content")),
+            HasH1 = doc.QuerySelector("h1") is not null,
+            HasCanonical = doc.QuerySelector("link[rel=canonical]") is not null,
+            HasStructuredData = doc.QuerySelectorAll("script[type='application/ld+json']").Length > 0
+                                || doc.QuerySelectorAll("[itemtype*='schema.org']").Length > 0,
             HasSitemap = sitemap,
             HasRobotsTxt = robots,
 
-            HasViewportMeta = ViewportRegex().IsMatch(head),
-            HasFixedWidthViewport = FixedWidthViewportRegex().IsMatch(head),
+            HasViewportMeta = viewport is not null,
+            HasFixedWidthViewport = viewport is not null && FixedWidth(viewport),
 
+            // Assinatura de tecnologia continua sobre o HTML CRU, de proposito:
+            // o que ela procura sao trechos literais - `gtag/js?id=G-`,
+            // `wa.me/` - que aparecem dentro de atributos e de corpo de script.
+            // Passar pelo DOM esconderia justamente onde eles vivem.
             Technologies = TechnologySignatures.DetectAll(html),
 
             ObservedAt = observedAt
         };
+    }
+
+    private static string? Attr(IDocument doc, string selector, string attribute) =>
+        doc.QuerySelector(selector)?.GetAttribute(attribute);
+
+    /// <summary>
+    /// Largura fixa em px no viewport — o oposto de responsivo.
+    /// <c>width=device-width</c> passa; <c>width=1024</c> não.
+    /// </summary>
+    private static bool FixedWidth(string viewport)
+    {
+        var width = viewport
+            .Split(',')
+            .Select(p => p.Trim())
+            .FirstOrDefault(p => p.StartsWith("width=", StringComparison.OrdinalIgnoreCase));
+
+        return width is not null && char.IsAsciiDigit(width["width=".Length..].Trim().FirstOrDefault());
     }
 
     /// <summary>
@@ -210,52 +259,23 @@ public sealed partial class HttpWebsiteProbe(
     }
 
     /// <summary>
-    /// Só o <c>&lt;head&gt;</c>. As regex de SEO e viewport nao devem casar com
-    /// um &lt;title&gt; dentro de um SVG no corpo da pagina.
+    /// Script sincrono e folha de estilo bloqueiam a primeira pintura. Script
+    /// com <c>async</c> ou <c>defer</c> nao bloqueia, e por isso e descontado.
+    ///
+    /// Escopo no <c>&lt;head&gt;</c>, e o parser e quem decide o que esta nele:
+    /// pelas regras de parsing do HTML5, uma folha de estilo solta no meio do
+    /// corpo NAO vai para o head. A contagem por texto nao sabia disso.
     /// </summary>
-    private static string HeadOf(string html)
+    private static int CountRenderBlocking(IDocument doc)
     {
-        var end = html.IndexOf("</head", StringComparison.OrdinalIgnoreCase);
-        return end > 0 ? html[..end] : html;
+        var head = doc.Head;
+
+        if (head is null) return 0;
+
+        var scripts = head.QuerySelectorAll("script[src]")
+            .OfType<IHtmlScriptElement>()
+            .Count(s => !s.IsAsync && !s.IsDeferred);
+
+        return scripts + head.QuerySelectorAll("link[rel=stylesheet]").Length;
     }
-
-    /// <summary>
-    /// Script sincrono e folha de estilo no head bloqueiam a primeira pintura.
-    /// Script com async ou defer nao bloqueia, e por isso e descontado.
-    /// </summary>
-    private static int CountRenderBlocking(string head)
-    {
-        var scripts = ScriptSrcRegex().Matches(head).Count(m =>
-            !m.Value.Contains("async", StringComparison.OrdinalIgnoreCase) &&
-            !m.Value.Contains("defer", StringComparison.OrdinalIgnoreCase));
-
-        return scripts + StylesheetRegex().Matches(head).Count;
-    }
-
-    [GeneratedRegex(@"<title[^>]*>\s*\S", RegexOptions.IgnoreCase)]
-    private static partial Regex TitleRegex();
-
-    [GeneratedRegex(@"<meta[^>]+name\s*=\s*[""']description[""'][^>]+content\s*=\s*[""']\s*\S", RegexOptions.IgnoreCase)]
-    private static partial Regex MetaDescriptionRegex();
-
-    [GeneratedRegex(@"<h1[^>]*>", RegexOptions.IgnoreCase)]
-    private static partial Regex H1Regex();
-
-    [GeneratedRegex(@"<link[^>]+rel\s*=\s*[""']canonical[""']", RegexOptions.IgnoreCase)]
-    private static partial Regex CanonicalRegex();
-
-    [GeneratedRegex(@"application/ld\+json|itemtype\s*=\s*[""']https?://schema\.org", RegexOptions.IgnoreCase)]
-    private static partial Regex StructuredDataRegex();
-
-    [GeneratedRegex(@"<meta[^>]+name\s*=\s*[""']viewport[""']", RegexOptions.IgnoreCase)]
-    private static partial Regex ViewportRegex();
-
-    [GeneratedRegex(@"<meta[^>]+name\s*=\s*[""']viewport[""'][^>]+content\s*=\s*[""'][^""']*width\s*=\s*\d", RegexOptions.IgnoreCase)]
-    private static partial Regex FixedWidthViewportRegex();
-
-    [GeneratedRegex(@"<script[^>]+src\s*=[^>]*>", RegexOptions.IgnoreCase)]
-    private static partial Regex ScriptSrcRegex();
-
-    [GeneratedRegex(@"<link[^>]+rel\s*=\s*[""']stylesheet[""']", RegexOptions.IgnoreCase)]
-    private static partial Regex StylesheetRegex();
 }

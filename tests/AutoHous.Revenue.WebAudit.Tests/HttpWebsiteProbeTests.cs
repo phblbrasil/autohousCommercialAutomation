@@ -202,40 +202,56 @@ public class HttpWebsiteProbeTests
     // ------------------------------------------------- o que o regex erra hoje
 
     /// <summary>
-    /// **Comportamento errado, fixado de propósito.**
+    /// Comentário não é elemento.
     ///
-    /// `H1Regex` é `&lt;h1[^&gt;]*&gt;` aplicado ao documento cru, então um `h1`
-    /// dentro de comentário HTML conta como `h1` de verdade. Um parser não
-    /// cometeria esse erro — comentário não é elemento.
+    /// O motor de regex media `&lt;h1[^&gt;]*&gt;` sobre o documento cru, então
+    /// `&lt;!-- &lt;h1&gt;antigo&lt;/h1&gt; --&gt;` contava como título de
+    /// verdade. É o tipo de erro que não aparece em lugar nenhum: a página é
+    /// reprovada ou aprovada por um elemento que o navegador nunca renderizou.
     ///
-    /// O teste existe para que a troca do motor de parse mostre a mudança em vez
-    /// de escondê-la: quando ele quebrar, é porque o defeito foi corrigido, e a
-    /// linha vira `Assert.False`.
+    /// Para um parser isso não é nem caso especial — comentário simplesmente não
+    /// entra na árvore.
     /// </summary>
     [Fact]
-    public async Task DEFEITO_h1_dentro_de_comentario_conta_como_h1()
+    public async Task H1_dentro_de_comentario_nao_conta()
     {
         var r = await ProbeAsync(
             "<html><head><title>x</title></head><body><!-- <h1>antigo</h1> --><p>sem titulo</p></body></html>");
 
-        Assert.True(r.HasH1);
+        Assert.False(r.HasH1);
     }
 
     /// <summary>
-    /// **Comportamento errado, fixado de propósito.**
+    /// Menção a `application/ld+json` em texto não é dado estruturado.
     ///
-    /// A assinatura de dado estruturado casa com o texto `application/ld+json`
-    /// em qualquer lugar do documento — inclusive dentro de um comentário, ou
-    /// citado como texto num artigo sobre SEO. Um parser leria os elementos
-    /// `script` de verdade.
+    /// A assinatura antiga casava com a string em qualquer lugar do documento —
+    /// num comentário, ou citada num artigo sobre SEO. Agora a medida é a
+    /// existência do elemento `script` com aquele `type`, que é o que um motor
+    /// de resposta de fato lê.
     /// </summary>
     [Fact]
-    public async Task DEFEITO_mencao_a_ld_json_em_comentario_conta_como_dado_estruturado()
+    public async Task Mencao_a_ld_json_em_comentario_nao_conta_como_dado_estruturado()
     {
         var r = await ProbeAsync(
             "<html><head><title>x</title></head><body><!-- usar application/ld+json aqui --></body></html>");
 
-        Assert.True(r.HasStructuredData);
+        Assert.False(r.HasStructuredData);
+    }
+
+    /// <summary>
+    /// `&lt;title&gt;` de SVG no corpo não é título de documento.
+    ///
+    /// O seletor é `head &gt; title` justamente por isso: um ícone SVG com
+    /// `&lt;title&gt;Menu&lt;/title&gt;` no corpo aprovaria o SEO de uma página
+    /// que não tem título nenhum.
+    /// </summary>
+    [Fact]
+    public async Task Title_de_svg_no_corpo_nao_e_titulo_de_documento()
+    {
+        var r = await ProbeAsync(
+            "<html><head></head><body><svg><title>Menu</title></svg><p>oi</p></body></html>");
+
+        Assert.False(r.HasTitle);
     }
 
     /// <summary>
